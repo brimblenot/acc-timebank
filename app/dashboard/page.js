@@ -57,6 +57,9 @@ export default function Dashboard() {
           <Link href="/my-posts" className="text-sm text-stone-400 hover:text-white transition">
             My Posts
           </Link>
+          <Link href="/my-applications" className="text-sm text-stone-400 hover:text-white transition">
+            My Applications
+          </Link>
           <button
             onClick={handleLogout}
             className="px-4 py-2 text-sm text-stone-400 hover:text-white transition"
@@ -87,23 +90,29 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Link href="/posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
             <div className="text-2xl mb-3">📋</div>
-            <h3 className="font-bold mb-1">Browse Requests</h3>
-            <p className="text-stone-400 text-sm">See what your community needs</p>
+            <h3 className="font-bold mb-1">Browse</h3>
+            <p className="text-stone-400 text-sm">See community requests</p>
           </Link>
 
           <Link href="/posts/new" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
             <div className="text-2xl mb-3">✏️</div>
-            <h3 className="font-bold mb-1">Post a Request</h3>
-            <p className="text-stone-400 text-sm">Ask for help with something</p>
+            <h3 className="font-bold mb-1">Post Request</h3>
+            <p className="text-stone-400 text-sm">Ask for help</p>
           </Link>
 
           <Link href="/my-posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
             <div className="text-2xl mb-3">📬</div>
             <h3 className="font-bold mb-1">My Posts</h3>
-            <p className="text-stone-400 text-sm">Review applications to your requests</p>
+            <p className="text-stone-400 text-sm">Review applicants</p>
+          </Link>
+
+          <Link href="/my-applications" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
+            <div className="text-2xl mb-3">🙋</div>
+            <h3 className="font-bold mb-1">My Applications</h3>
+            <p className="text-stone-400 text-sm">Track your offers</p>
           </Link>
         </div>
 
