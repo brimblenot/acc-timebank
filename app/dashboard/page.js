@@ -15,6 +15,11 @@ export default function Dashboard() {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [stats, setStats] = useState({
+    activePosts: 0,
+    servicesGiven: 0,
+    servicesReceived: 0,
+  })
   const bottomRef = useRef(null)
   const messagesRef = useRef([])
   const channelRef = useRef(null)
@@ -31,8 +36,9 @@ export default function Dashboard() {
         .single()
 
       setProfile(data)
-      setLoading(false)
       fetchConversations(user.id)
+      fetchStats(user.id)
+      setLoading(false)
     }
     getProfile()
   }, [])
@@ -40,6 +46,42 @@ export default function Dashboard() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const fetchStats = async (userId) => {
+    // Active posts — open or in_progress
+    const { count: activePosts } = await supabase
+      .from('service_posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('poster_id', userId)
+      .in('status', ['open', 'in_progress'])
+
+    // Services given — completed posts where user was the applicant
+    const { count: servicesGiven } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('applicant_id', userId)
+      .eq('status', 'approved')
+      .in('post_id',
+        await supabase
+          .from('service_posts')
+          .select('id')
+          .eq('status', 'completed')
+          .then(r => (r.data || []).map(p => p.id))
+      )
+
+    // Services received — completed posts where user was the poster
+    const { count: servicesReceived } = await supabase
+      .from('service_posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('poster_id', userId)
+      .eq('status', 'completed')
+
+    setStats({
+      activePosts: activePosts || 0,
+      servicesGiven: servicesGiven || 0,
+      servicesReceived: servicesReceived || 0,
+    })
+  }
 
   const fetchConversations = async (userId) => {
     const { data: asApplicant } = await supabase
@@ -90,12 +132,10 @@ export default function Dashboard() {
     setMessages([])
     messagesRef.current = []
 
-    // Unsubscribe from previous channel
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current)
     }
 
-    // Load messages
     const { data } = await supabase
       .from('messages')
       .select('*')
@@ -105,7 +145,6 @@ export default function Dashboard() {
     messagesRef.current = data || []
     setMessages(data || [])
 
-    // Subscribe to new messages
     const channel = supabase
       .channel(`dashboard-room-${convo.id}`)
       .on('postgres_changes', {
@@ -238,31 +277,29 @@ export default function Dashboard() {
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 text-center">
-            <p className="text-2xl font-bold">0</p>
+            <p className="text-2xl font-bold">{stats.activePosts}</p>
             <p className="text-stone-400 text-sm mt-1">Active Posts</p>
           </div>
           <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 text-center">
-            <p className="text-2xl font-bold">0</p>
+            <p className="text-2xl font-bold">{stats.servicesGiven}</p>
             <p className="text-stone-400 text-sm mt-1">Services Given</p>
           </div>
           <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 text-center">
-            <p className="text-2xl font-bold">0</p>
+            <p className="text-2xl font-bold">{stats.servicesReceived}</p>
             <p className="text-stone-400 text-sm mt-1">Services Received</p>
           </div>
         </div>
+
       </div>
 
       {/* Full Messages Overlay */}
       {messagesOpen && (
         <div className="fixed inset-0 z-50 flex">
-
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black bg-opacity-60"
             onClick={() => { setMessagesOpen(false); setActiveConvo(null) }}
           />
 
-          {/* Panel — centered, wide */}
           <div className="relative m-auto w-full max-w-4xl h-[80vh] bg-stone-900 border border-stone-700 rounded-2xl flex overflow-hidden shadow-2xl">
 
             {/* Conversation List */}
@@ -316,13 +353,11 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <>
-                  {/* Thread Header */}
                   <div className="px-6 py-4 border-b border-stone-800 shrink-0">
                     <p className="font-bold">{activeConvo.otherPerson}</p>
                     <p className="text-stone-400 text-xs mt-0.5">{activeConvo.title}</p>
                   </div>
 
-                  {/* Messages */}
                   <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
                     {messages.length === 0 ? (
                       <div className="flex items-center justify-center h-full">
@@ -350,7 +385,6 @@ export default function Dashboard() {
                     <div ref={bottomRef} />
                   </div>
 
-                  {/* Input */}
                   <form onSubmit={handleSend} className="px-6 py-4 border-t border-stone-800 shrink-0">
                     <div className="flex gap-3">
                       <input
