@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -9,15 +9,20 @@ export default function Dashboard() {
   const router = useRouter()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [messagesOpen, setMessagesOpen] = useState(false)
+  const [conversations, setConversations] = useState([])
+  const [activeConvo, setActiveConvo] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [newMessage, setNewMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const bottomRef = useRef(null)
+  const messagesRef = useRef([])
+  const channelRef = useRef(null)
 
   useEffect(() => {
     const getProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
+      if (!user) { router.push('/login'); return }
 
       const { data } = await supabase
         .from('profiles')
@@ -27,10 +32,116 @@ export default function Dashboard() {
 
       setProfile(data)
       setLoading(false)
+      fetchConversations(user.id)
     }
-
     getProfile()
   }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const fetchConversations = async (userId) => {
+    const { data: asApplicant } = await supabase
+      .from('applications')
+      .select(`
+        id, status,
+        service_posts (id, title, hours_required, poster_id,
+          profiles (full_name, username)
+        )
+      `)
+      .eq('applicant_id', userId)
+      .eq('status', 'approved')
+
+    const postIds = await supabase
+      .from('service_posts')
+      .select('id')
+      .eq('poster_id', userId)
+      .then(r => (r.data || []).map(p => p.id))
+
+    const { data: asPoster } = postIds.length > 0 ? await supabase
+      .from('applications')
+      .select(`
+        id, status, applicant_id,
+        service_posts (id, title, hours_required, poster_id),
+        profiles (full_name, username)
+      `)
+      .eq('status', 'approved')
+      .in('post_id', postIds) : { data: [] }
+
+    const all = [
+      ...(asApplicant || []).map(a => ({
+        id: a.id,
+        title: a.service_posts?.title,
+        otherPerson: a.service_posts?.profiles?.full_name || a.service_posts?.profiles?.username,
+      })),
+      ...(asPoster || []).map(a => ({
+        id: a.id,
+        title: a.service_posts?.title,
+        otherPerson: a.profiles?.full_name || a.profiles?.username,
+      })),
+    ]
+
+    setConversations(all)
+  }
+
+  const openConversation = async (convo) => {
+    setActiveConvo(convo)
+    setMessages([])
+    messagesRef.current = []
+
+    // Unsubscribe from previous channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+    }
+
+    // Load messages
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('application_id', convo.id)
+      .order('created_at', { ascending: true })
+
+    messagesRef.current = data || []
+    setMessages(data || [])
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel(`dashboard-room-${convo.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `application_id=eq.${convo.id}`,
+      }, (payload) => {
+        const newMsg = payload.new
+        const already = messagesRef.current.find(m => m.id === newMsg.id)
+        if (!already) {
+          messagesRef.current = [...messagesRef.current, newMsg]
+          setMessages([...messagesRef.current])
+        }
+      })
+      .subscribe()
+
+    channelRef.current = channel
+  }
+
+  const handleSend = async (e) => {
+    e.preventDefault()
+    if (!newMessage.trim() || !activeConvo || !profile) return
+    setSending(true)
+
+    const content = newMessage.trim()
+    setNewMessage('')
+
+    await supabase.from('messages').insert({
+      application_id: activeConvo.id,
+      sender_id: profile.id,
+      content,
+    })
+
+    setSending(false)
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -54,12 +165,9 @@ export default function Dashboard() {
           ACC Timebank
         </span>
         <div className="flex gap-4 items-center">
-          <Link href="/my-posts" className="text-sm text-stone-400 hover:text-white transition">
-            My Posts
-          </Link>
-          <Link href="/my-applications" className="text-sm text-stone-400 hover:text-white transition">
-            My Applications
-          </Link>
+          <Link href="/posts" className="text-sm text-stone-400 hover:text-white transition">Browse</Link>
+          <Link href="/my-applications" className="text-sm text-stone-400 hover:text-white transition">My Applications</Link>
+          <Link href="/my-posts" className="text-sm text-stone-400 hover:text-white transition">My Posts</Link>
           <button
             onClick={handleLogout}
             className="px-4 py-2 text-sm text-stone-400 hover:text-white transition"
@@ -90,30 +198,41 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Link href="/posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <Link href="/posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-5 text-left transition block">
             <div className="text-2xl mb-3">📋</div>
-            <h3 className="font-bold mb-1">Browse</h3>
-            <p className="text-stone-400 text-sm">See community requests</p>
+            <h3 className="font-bold text-sm mb-1">Browse</h3>
+            <p className="text-stone-400 text-xs">See community requests</p>
           </Link>
 
-          <Link href="/posts/new" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
+          <Link href="/posts/new" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-5 text-left transition block">
             <div className="text-2xl mb-3">✏️</div>
-            <h3 className="font-bold mb-1">Post Request</h3>
-            <p className="text-stone-400 text-sm">Ask for help</p>
+            <h3 className="font-bold text-sm mb-1">Post Request</h3>
+            <p className="text-stone-400 text-xs">Ask for help</p>
           </Link>
 
-          <Link href="/my-posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
-            <div className="text-2xl mb-3">📬</div>
-            <h3 className="font-bold mb-1">My Posts</h3>
-            <p className="text-stone-400 text-sm">Review applicants</p>
-          </Link>
-
-          <Link href="/my-applications" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
+          <Link href="/my-applications" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-5 text-left transition block">
             <div className="text-2xl mb-3">🙋</div>
-            <h3 className="font-bold mb-1">My Applications</h3>
-            <p className="text-stone-400 text-sm">Track your offers</p>
+            <h3 className="font-bold text-sm mb-1">My Applications</h3>
+            <p className="text-stone-400 text-xs">Track your offers</p>
           </Link>
+
+          <Link href="/my-posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-5 text-left transition block">
+            <div className="text-2xl mb-3">📬</div>
+            <h3 className="font-bold text-sm mb-1">My Posts</h3>
+            <p className="text-stone-400 text-xs">Review applicants</p>
+          </Link>
+
+          <button
+            onClick={() => setMessagesOpen(true)}
+            className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-5 text-left transition"
+          >
+            <div className="text-2xl mb-3">💬</div>
+            <h3 className="font-bold text-sm mb-1">Messages</h3>
+            <p className="text-stone-400 text-xs">
+              {conversations.length > 0 ? `${conversations.length} active` : 'No active chats'}
+            </p>
+          </button>
         </div>
 
         {/* Stats Row */}
@@ -131,8 +250,133 @@ export default function Dashboard() {
             <p className="text-stone-400 text-sm mt-1">Services Received</p>
           </div>
         </div>
-
       </div>
+
+      {/* Full Messages Overlay */}
+      {messagesOpen && (
+        <div className="fixed inset-0 z-50 flex">
+
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black bg-opacity-60"
+            onClick={() => { setMessagesOpen(false); setActiveConvo(null) }}
+          />
+
+          {/* Panel — centered, wide */}
+          <div className="relative m-auto w-full max-w-4xl h-[80vh] bg-stone-900 border border-stone-700 rounded-2xl flex overflow-hidden shadow-2xl">
+
+            {/* Conversation List */}
+            <div className="w-72 border-r border-stone-800 flex flex-col shrink-0">
+              <div className="px-5 py-4 border-b border-stone-800 flex justify-between items-center">
+                <div>
+                  <h2 className="font-bold">Messages</h2>
+                  <p className="text-stone-400 text-xs">{conversations.length} conversations</p>
+                </div>
+                <button
+                  onClick={() => { setMessagesOpen(false); setActiveConvo(null) }}
+                  className="text-stone-400 hover:text-white text-2xl leading-none transition"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {conversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                    <p className="text-stone-400 text-sm">No conversations yet.</p>
+                  </div>
+                ) : (
+                  conversations.map(convo => (
+                    <button
+                      key={convo.id}
+                      onClick={() => openConversation(convo)}
+                      className={`w-full flex items-center gap-3 px-5 py-4 hover:bg-stone-800 transition text-left border-b border-stone-800 ${
+                        activeConvo?.id === convo.id ? 'bg-stone-800 border-l-2 border-l-emerald-500' : ''
+                      }`}
+                    >
+                      <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        {convo.otherPerson?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{convo.otherPerson}</p>
+                        <p className="text-stone-400 text-xs truncate mt-0.5">{convo.title}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Message Thread */}
+            <div className="flex-1 flex flex-col min-w-0">
+              {!activeConvo ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+                  <div className="text-5xl mb-4">💬</div>
+                  <p className="text-stone-400">Select a conversation to start chatting</p>
+                </div>
+              ) : (
+                <>
+                  {/* Thread Header */}
+                  <div className="px-6 py-4 border-b border-stone-800 shrink-0">
+                    <p className="font-bold">{activeConvo.otherPerson}</p>
+                    <p className="text-stone-400 text-xs mt-0.5">{activeConvo.title}</p>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+                    {messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-stone-400 text-sm">No messages yet. Say hello!</p>
+                      </div>
+                    ) : (
+                      messages.map(msg => {
+                        const isMe = msg.sender_id === profile?.id
+                        return (
+                          <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${
+                              isMe
+                                ? 'bg-emerald-600 text-white rounded-br-sm'
+                                : 'bg-stone-800 text-stone-100 rounded-bl-sm'
+                            }`}>
+                              <p>{msg.content}</p>
+                              <p className={`text-xs mt-1 ${isMe ? 'text-emerald-200' : 'text-stone-500'}`}>
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                    <div ref={bottomRef} />
+                  </div>
+
+                  {/* Input */}
+                  <form onSubmit={handleSend} className="px-6 py-4 border-t border-stone-800 shrink-0">
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type a message..."
+                        className="flex-1 bg-stone-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition"
+                      />
+                      <button
+                        type="submit"
+                        disabled={sending || !newMessage.trim()}
+                        className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-stone-700 disabled:text-stone-500 text-black font-bold rounded-xl transition text-sm"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </main>
   )
 }

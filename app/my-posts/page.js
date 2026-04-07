@@ -10,6 +10,7 @@ export default function MyPosts() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
+  const [completing, setCompleting] = useState(null)
 
   useEffect(() => {
     const init = async () => {
@@ -29,6 +30,7 @@ export default function MyPosts() {
           id,
           status,
           created_at,
+          applicant_id,
           profiles (id, full_name, username, bio)
         )
       `)
@@ -54,10 +56,36 @@ export default function MyPosts() {
         .eq('id', postId)
     }
 
-    // Refresh
     const { data: { user } } = await supabase.auth.getUser()
     fetchMyPosts(user.id)
     setUpdating(null)
+  }
+
+  const handleComplete = async (post) => {
+    setCompleting(post.id)
+
+    // Find the approved application to get the provider's ID
+    const approvedApp = post.applications.find(a => a.status === 'approved')
+    if (!approvedApp) {
+      alert('No approved applicant found.')
+      setCompleting(null)
+      return
+    }
+
+    const { error } = await supabase.rpc('transfer_hours', {
+      from_user: post.poster_id,
+      to_user: approvedApp.applicant_id,
+      amount: post.hours_required,
+      post_id: post.id,
+    })
+
+    if (error) {
+      alert('Error completing service: ' + error.message)
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    fetchMyPosts(user.id)
+    setCompleting(null)
   }
 
   if (loading) {
@@ -104,7 +132,7 @@ export default function MyPosts() {
           <div className="flex flex-col gap-8">
             {posts.map(post => (
               <div key={post.id} className="bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden">
-                
+
                 {/* Post Header */}
                 <div className="p-6 border-b border-stone-800">
                   <div className="flex justify-between items-start">
@@ -121,12 +149,39 @@ export default function MyPosts() {
                       <span className={`text-xs font-medium px-2 py-1 rounded-full mt-2 inline-block ${
                         post.status === 'open' ? 'bg-emerald-900 text-emerald-400' :
                         post.status === 'in_progress' ? 'bg-yellow-900 text-yellow-400' :
+                        post.status === 'completed' ? 'bg-stone-700 text-stone-400' :
                         'bg-stone-700 text-stone-400'
                       }`}>
                         {post.status}
                       </span>
                     </div>
                   </div>
+
+                  {/* Complete Button */}
+                  {post.status === 'in_progress' && (
+                    <div className="mt-4 pt-4 border-t border-stone-800">
+                      <div className="flex items-center justify-between">
+                        <p className="text-stone-400 text-sm">
+                          Service in progress — mark as complete when done to transfer hours.
+                        </p>
+                        <button
+                          onClick={() => handleComplete(post)}
+                          disabled={completing === post.id}
+                          className="ml-4 px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-stone-700 disabled:text-stone-500 text-black text-sm font-bold rounded-lg transition shrink-0"
+                        >
+                          {completing === post.id ? 'Processing...' : '✓ Mark Complete'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {post.status === 'completed' && (
+                    <div className="mt-4 pt-4 border-t border-stone-800">
+                      <p className="text-emerald-400 text-sm font-medium">
+                        ✓ Service completed — {post.hours_required} hours transferred
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Applications */}
@@ -172,13 +227,23 @@ export default function MyPosts() {
                                 </button>
                               </>
                             ) : (
-                              <span className={`text-sm font-medium px-3 py-1 rounded-full ${
-                                app.status === 'approved'
-                                  ? 'bg-emerald-900 text-emerald-400'
-                                  : 'bg-stone-700 text-stone-400'
-                              }`}>
-                                {app.status}
-                              </span>
+                              <div className="flex items-center gap-3">
+                                <span className={`text-sm font-medium px-3 py-1 rounded-full ${
+                                  app.status === 'approved'
+                                    ? 'bg-emerald-900 text-emerald-400'
+                                    : 'bg-stone-700 text-stone-400'
+                                }`}>
+                                  {app.status}
+                                </span>
+                                {app.status === 'approved' && (
+                                  <Link
+                                    href={`/messages/${app.id}`}
+                                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-bold rounded-lg transition"
+                                  >
+                                    Messages →
+                                  </Link>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

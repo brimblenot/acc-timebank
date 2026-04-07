@@ -15,6 +15,7 @@ export default function MessageThread() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
+  const messagesRef = useRef([])
 
   useEffect(() => {
     const init = async () => {
@@ -22,7 +23,6 @@ export default function MessageThread() {
       if (!user) { router.push('/login'); return }
       setCurrentUser(user)
 
-      // Fetch application with post and profiles
       const { data: app } = await supabase
         .from('applications')
         .select(`
@@ -42,24 +42,45 @@ export default function MessageThread() {
       }
 
       setApplication(app)
-      fetchMessages()
+
+      // Load initial messages
+      const { data: initialMessages } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('application_id', id)
+        .order('created_at', { ascending: true })
+
+      messagesRef.current = initialMessages || []
+      setMessages(initialMessages || [])
       setLoading(false)
 
       // Realtime subscription
       const channel = supabase
-        .channel(`messages-${id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `application_id=eq.${id}`
-        }, (payload) => {
-          setMessages(prev => [...prev, payload.new])
-        })
+        .channel(`room-${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `application_id=eq.${id}`,
+          },
+          (payload) => {
+            const newMsg = payload.new
+            const already = messagesRef.current.find(m => m.id === newMsg.id)
+            if (!already) {
+              messagesRef.current = [...messagesRef.current, newMsg]
+              setMessages([...messagesRef.current])
+            }
+          }
+        )
         .subscribe()
 
-      return () => supabase.removeChannel(channel)
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
+
     init()
   }, [id])
 
@@ -67,28 +88,20 @@ export default function MessageThread() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const fetchMessages = async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('application_id', id)
-      .order('created_at', { ascending: true })
-
-    setMessages(data || [])
-  }
-
   const handleSend = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || !currentUser) return
     setSending(true)
+
+    const content = newMessage.trim()
+    setNewMessage('')
 
     await supabase.from('messages').insert({
       application_id: id,
       sender_id: currentUser.id,
-      content: newMessage.trim()
+      content,
     })
 
-    setNewMessage('')
     setSending(false)
   }
 
@@ -100,7 +113,7 @@ export default function MessageThread() {
     )
   }
 
-  const otherPerson = currentUser.id === application.service_posts.poster_id
+  const otherPerson = currentUser?.id === application.service_posts.poster_id
     ? application.profiles
     : application.service_posts.profiles
 
@@ -113,7 +126,7 @@ export default function MessageThread() {
           ACC Timebank
         </Link>
         <Link href="/my-applications" className="text-sm text-stone-400 hover:text-white transition">
-          ← My Applications
+          ← Back
         </Link>
       </nav>
 
@@ -137,12 +150,9 @@ export default function MessageThread() {
           </div>
         ) : (
           messages.map(msg => {
-            const isMe = msg.sender_id === currentUser.id
+            const isMe = msg.sender_id === currentUser?.id
             return (
-              <div
-                key={msg.id}
-                className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
-              >
+              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-sm px-4 py-3 rounded-2xl text-sm ${
                   isMe
                     ? 'bg-emerald-600 text-white rounded-br-sm'
