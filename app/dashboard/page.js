@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function Dashboard() {
   const router = useRouter()
@@ -52,12 +53,17 @@ export default function Dashboard() {
         <span className="text-xl font-bold tracking-tight text-emerald-400">
           ACC Timebank
         </span>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 text-sm text-stone-400 hover:text-white transition"
-        >
-          Log Out
-        </button>
+        <div className="flex gap-4 items-center">
+          <Link href="/my-posts" className="text-sm text-stone-400 hover:text-white transition">
+            My Posts
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm text-stone-400 hover:text-white transition"
+          >
+            Log Out
+          </button>
+        </div>
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
@@ -82,23 +88,23 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <button className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition">
+          <Link href="/posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
             <div className="text-2xl mb-3">📋</div>
             <h3 className="font-bold mb-1">Browse Requests</h3>
             <p className="text-stone-400 text-sm">See what your community needs</p>
-          </button>
+          </Link>
 
-          <button className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition">
+          <Link href="/posts/new" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
             <div className="text-2xl mb-3">✏️</div>
             <h3 className="font-bold mb-1">Post a Request</h3>
             <p className="text-stone-400 text-sm">Ask for help with something</p>
-          </button>
+          </Link>
 
-          <button className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition">
-            <div className="text-2xl mb-3">👤</div>
-            <h3 className="font-bold mb-1">My Profile</h3>
-            <p className="text-stone-400 text-sm">Edit your skills and bio</p>
-          </button>
+          <Link href="/my-posts" className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 text-left transition block">
+            <div className="text-2xl mb-3">📬</div>
+            <h3 className="font-bold mb-1">My Posts</h3>
+            <p className="text-stone-400 text-sm">Review applications to your requests</p>
+          </Link>
         </div>
 
         {/* Stats Row */}
