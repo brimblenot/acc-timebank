@@ -48,20 +48,18 @@ export default function NewPost() {
     setLoading(true)
     setError(null)
 
-    // Check user has enough hours
     const { data: profile } = await supabase
       .from('profiles')
       .select('hour_balance')
       .eq('id', user.id)
       .single()
 
-    if (profile.hour_balance < formData.hours_required) {
-      setError(`You only have ${profile.hour_balance} hours available.`)
+    if (profile.hour_balance - formData.hours_required < -5) {
+      setError(`This would exceed your debt limit. Your balance would go below -5 hours.`)
       setLoading(false)
       return
     }
 
-    // Create the post
     const { error: postError } = await supabase
       .from('service_posts')
       .insert({
@@ -160,6 +158,7 @@ export default function NewPost() {
               />
               <span className="text-stone-400 text-sm">hours in exchange for this service</span>
             </div>
+            <p className="text-stone-500 text-xs mt-2">You can go up to -5 hours in debt.</p>
           </div>
 
           {error && (
