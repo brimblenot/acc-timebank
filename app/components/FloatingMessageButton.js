@@ -1,90 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { usePathname, useRouter } from 'next/navigation'
+import { useMessages } from '../context/MessagesContext'
 
 export default function FloatingMessageButton() {
-  const [show, setShow] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-  const pathname = usePathname()
-  const router = useRouter()
+  const { openMessages, totalUnread, userId } = useMessages()
 
-  useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setShow(true)
-      await fetchUnreadCount(user.id)
-    }
-    init()
-  }, [pathname])
-
-  const fetchUnreadCount = async (userId) => {
-    try {
-      const { data: asApplicant } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('applicant_id', userId)
-        .eq('status', 'approved')
-
-      const { data: myPosts } = await supabase
-        .from('service_posts')
-        .select('id')
-        .eq('poster_id', userId)
-
-      let posterAppIds = []
-      if (myPosts?.length) {
-        const { data: posterApps } = await supabase
-          .from('applications')
-          .select('id')
-          .eq('status', 'approved')
-          .in('post_id', myPosts.map(p => p.id))
-        posterAppIds = posterApps?.map(a => a.id) || []
-      }
-
-      const allAppIds = [
-        ...(asApplicant?.map(a => a.id) || []),
-        ...posterAppIds,
-      ]
-
-      if (!allAppIds.length) { setUnreadCount(0); return }
-
-      const { data: reads, error: readsError } = await supabase
-        .from('conversation_reads')
-        .select('application_id, last_read_at')
-        .eq('user_id', userId)
-        .in('application_id', allAppIds)
-
-      if (readsError) { setUnreadCount(0); return }
-
-      const readsMap = {}
-      reads?.forEach(r => { readsMap[r.application_id] = r.last_read_at })
-
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('application_id, created_at')
-        .in('application_id', allAppIds)
-        .neq('sender_id', userId)
-
-      let total = 0
-      msgs?.forEach(m => {
-        const lastRead = readsMap[m.application_id]
-        if (!lastRead || new Date(m.created_at) > new Date(lastRead)) total++
-      })
-
-      setUnreadCount(total)
-    } catch {
-      setUnreadCount(0)
-    }
-  }
-
-  if (!show) return null
-  if (pathname === '/dashboard' || pathname?.startsWith('/messages')) return null
+  if (!userId) return null
 
   return (
     <button
-      onClick={() => router.push('/dashboard')}
+      onClick={openMessages}
       title="Messages"
       style={{
         position: 'fixed',
@@ -106,7 +31,7 @@ export default function FloatingMessageButton() {
       }}
     >
       💬
-      {unreadCount > 0 && (
+      {totalUnread > 0 && (
         <span style={{
           position: 'absolute',
           top: '2px',
@@ -124,7 +49,7 @@ export default function FloatingMessageButton() {
           padding: '0 4px',
           border: '2px solid #FEFFFF',
         }}>
-          {unreadCount > 99 ? '99+' : unreadCount}
+          {totalUnread > 99 ? '99+' : totalUnread}
         </span>
       )}
     </button>

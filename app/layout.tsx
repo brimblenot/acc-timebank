@@ -1,5 +1,7 @@
 import { Cormorant_Garamond, Nunito } from 'next/font/google'
 import './globals.css'
+import { MessagesProvider } from './context/MessagesContext'
+import MessagesOverlay from './components/MessagesOverlay'
 import FloatingMessageButton from './components/FloatingMessageButton'
 
 const cormorant = Cormorant_Garamond({
@@ -27,8 +29,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cormorant.variable} ${nunito.variable}`}>
       <body style={{ fontFamily: 'var(--font-nunito)', margin: 0, padding: 0 }}>
-        {children}
-        <FloatingMessageButton />
+        <MessagesProvider>
+          {children}
+          <MessagesOverlay />
+          <FloatingMessageButton />
+        </MessagesProvider>
       </body>
     </html>
   )
