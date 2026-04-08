@@ -12,6 +12,8 @@ export default function MyPosts() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
   const [completing, setCompleting] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [reviewModal, setReviewModal] = useState(null)
   const [reviewData, setReviewData] = useState({ rating: 5, comment: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
@@ -51,7 +53,6 @@ export default function MyPosts() {
   const handleApprove = async (applicationId, postId) => {
     setUpdating(applicationId)
 
-    // Approve selected
     const { error: e1 } = await supabase
       .from('applications')
       .update({ status: 'approved' })
@@ -59,45 +60,41 @@ export default function MyPosts() {
 
     if (e1) { console.error('Approve error:', e1); setUpdating(null); return }
 
-    // Get all other pending apps
-    const { data: others, error: e2 } = await supabase
+    const { data: others } = await supabase
       .from('applications')
       .select('id')
       .eq('post_id', postId)
       .eq('status', 'pending')
 
-    if (e2) console.error('Fetch others error:', e2)
-
-    // Decline each other one
     for (const app of others || []) {
-      const { error: e3 } = await supabase
-        .from('applications')
-        .update({ status: 'declined' })
-        .eq('id', app.id)
-      if (e3) console.error('Decline error:', e3)
+      await supabase.from('applications').update({ status: 'declined' }).eq('id', app.id)
     }
 
-    // Set post in_progress
-    const { error: e4 } = await supabase
-      .from('service_posts')
-      .update({ status: 'in_progress' })
-      .eq('id', postId)
-
-    if (e4) console.error('Post update error:', e4)
-
+    await supabase.from('service_posts').update({ status: 'in_progress' }).eq('id', postId)
     await fetchMyPosts(currentUserId)
     setUpdating(null)
   }
 
   const handleDecline = async (applicationId) => {
     setUpdating(applicationId)
-    const { error } = await supabase
-      .from('applications')
-      .update({ status: 'declined' })
-      .eq('id', applicationId)
-    if (error) console.error('Decline error:', error)
+    await supabase.from('applications').update({ status: 'declined' }).eq('id', applicationId)
     await fetchMyPosts(currentUserId)
     setUpdating(null)
+  }
+
+  const handleDelete = async (post) => {
+    setDeleting(post.id)
+
+    // Delete related data first
+    await supabase.from('messages').delete().in('application_id',
+      (post.applications || []).map(a => a.id)
+    )
+    await supabase.from('applications').delete().eq('post_id', post.id)
+    await supabase.from('service_posts').delete().eq('id', post.id)
+
+    setDeleteConfirm(null)
+    setDeleting(null)
+    await fetchMyPosts(currentUserId)
   }
 
   const handleComplete = async (post) => {
@@ -193,20 +190,42 @@ export default function MyPosts() {
               const sc = statusColor(post.status)
               const approvedApp = post.applications?.find(a => a.status === 'approved')
               const visibleApps = post.applications?.filter(a => a.status !== 'declined') || []
+              const isCompleted = post.status === 'completed'
+              const isDeletable = post.status === 'open'
 
               return (
-                <div key={post.id} style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', overflow: 'hidden', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}>
+                <div
+                  key={post.id}
+                  style={{
+                    backgroundColor: isCompleted ? '#FAFAFA' : '#FEFFFF',
+                    border: '1px solid #E0E0DC',
+                    borderRadius: '1rem',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
+                    opacity: isCompleted ? 0.75 : 1,
+                    pointerEvents: isCompleted ? 'none' : 'auto',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Completed overlay label */}
+                  {isCompleted && (
+                    <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 2 }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2', border: '1px solid #E0E0DC' }}>
+                        Archived
+                      </span>
+                    </div>
+                  )}
 
                   {/* Post Header */}
                   <div style={{ padding: '1.5rem', borderBottom: '1px solid #E0E0DC' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{post.category}</span>
-                        <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', marginBottom: '0.25rem' }}>{post.title}</h2>
+                        <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', marginBottom: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>{post.title}</h2>
                         <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>{post.description}</p>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}</p>
+                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>{post.hours_required}</p>
                         <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '9999px', marginTop: '0.5rem', display: 'inline-block', backgroundColor: sc.bg, color: sc.color }}>
                           {post.status}
@@ -214,17 +233,46 @@ export default function MyPosts() {
                       </div>
                     </div>
 
+                    {/* Delete button — only on open posts */}
+                    {isDeletable && (
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', display: 'flex', justifyContent: 'flex-end' }}>
+                        {deleteConfirm === post.id ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>Are you sure?</p>
+                            <button
+                              onClick={() => handleDelete(post)}
+                              disabled={deleting === post.id}
+                              style={{ padding: '0.4rem 1rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              {deleting === post.id ? 'Deleting...' : 'Yes, Delete'}
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              style={{ padding: '0.4rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(post.id)}
+                            style={{ padding: '0.4rem 1rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: 'pointer', fontSize: '0.8rem' }}
+                          >
+                            Delete Post
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {/* In Progress Banner */}
                     {post.status === 'in_progress' && approvedApp && (
                       <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
                         <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.75rem', padding: '1rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                            <div>
-                              <p style={{ color: '#237371', fontWeight: 700, fontSize: '0.875rem' }}>
-                                Working with {approvedApp.profiles?.full_name || approvedApp.profiles?.username}
-                              </p>
-                              <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>Mark complete when the service is done to transfer hours.</p>
-                            </div>
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <p style={{ color: '#237371', fontWeight: 700, fontSize: '0.875rem' }}>
+                              Working with {approvedApp.profiles?.full_name || approvedApp.profiles?.username}
+                            </p>
+                            <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>Mark complete when the service is done to transfer hours.</p>
                           </div>
                           <div style={{ display: 'flex', gap: '0.75rem' }}>
                             <Link
@@ -247,16 +295,20 @@ export default function MyPosts() {
 
                     {/* Completed Banner */}
                     {post.status === 'completed' && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
-                        <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.75rem', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <p style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600 }}>
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', pointerEvents: 'auto' }}>
+                        <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.75rem', padding: '1rem' }}>
+                          <p style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                             ✓ Completed — {post.hours_required} hours transferred
                             {approvedApp && ` to ${approvedApp.profiles?.full_name || approvedApp.profiles?.username}`}
+                          </p>
+                          <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>
+                            Completed on {new Date(post.updated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                           </p>
                           {(approvedApp || completedAppId) && (
                             <Link
                               href={`/messages/${approvedApp?.id || completedAppId}`}
-                              style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', flexShrink: 0, marginLeft: '1rem' }}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ display: 'inline-block', marginTop: '0.75rem', padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}
                             >
                               💬 Messages
                             </Link>
@@ -266,76 +318,78 @@ export default function MyPosts() {
                     )}
                   </div>
 
-                  {/* Applications */}
-                  <div style={{ padding: '1.5rem' }}>
-                    <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
-                      Applications ({visibleApps.length})
-                    </p>
+                  {/* Applications — hide on completed posts */}
+                  {!isCompleted && (
+                    <div style={{ padding: '1.5rem' }}>
+                      <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
+                        Applications ({visibleApps.length})
+                      </p>
 
-                    {visibleApps.length === 0 ? (
-                      <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No applications yet.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {visibleApps.map(app => (
-                          <div
-                            key={app.id}
-                            style={{
-                              backgroundColor: app.status === 'approved' ? '#EBF5F0' : '#F5F5F3',
-                              borderRadius: '0.75rem',
-                              padding: '1rem',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              border: app.status === 'approved' ? '1px solid #94B7A2' : '1px solid #E0E0DC'
-                            }}
-                          >
-                            <div>
-                              <Link href={`/profile/${app.profiles?.id}`} style={{ fontWeight: 700, color: '#237371', textDecoration: 'none', fontSize: '0.9rem' }}>
-                                {app.profiles?.full_name || app.profiles?.username}
-                              </Link>
-                              {app.profiles?.bio && <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>{app.profiles.bio}</p>}
-                              <p style={{ color: '#94B7A2', fontSize: '0.75rem', marginTop: '0.25rem' }}>Applied {new Date(app.created_at).toLocaleDateString()}</p>
+                      {visibleApps.length === 0 ? (
+                        <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No applications yet.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          {visibleApps.map(app => (
+                            <div
+                              key={app.id}
+                              style={{
+                                backgroundColor: app.status === 'approved' ? '#EBF5F0' : '#F5F5F3',
+                                borderRadius: '0.75rem',
+                                padding: '1rem',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                border: app.status === 'approved' ? '1px solid #94B7A2' : '1px solid #E0E0DC'
+                              }}
+                            >
+                              <div>
+                                <Link href={`/profile/${app.profiles?.id}`} style={{ fontWeight: 700, color: '#237371', textDecoration: 'none', fontSize: '0.9rem' }}>
+                                  {app.profiles?.full_name || app.profiles?.username}
+                                </Link>
+                                {app.profiles?.bio && <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>{app.profiles.bio}</p>}
+                                <p style={{ color: '#94B7A2', fontSize: '0.75rem', marginTop: '0.25rem' }}>Applied {new Date(app.created_at).toLocaleDateString()}</p>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, marginLeft: '1rem' }}>
+                                {app.status === 'pending' && post.status === 'open' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApprove(app.id, post.id)}
+                                      disabled={updating === app.id}
+                                      style={{ padding: '0.5rem 1rem', backgroundColor: updating === app.id ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                                    >
+                                      {updating === app.id ? 'Approving...' : 'Approve'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleDecline(app.id)}
+                                      disabled={updating === app.id}
+                                      style={{ padding: '0.5rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                                    >
+                                      Decline
+                                    </button>
+                                  </>
+                                )}
+
+                                {app.status === 'approved' && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371' }}>
+                                      ✓ Approved
+                                    </span>
+                                    <Link
+                                      href={`/messages/${app.id}`}
+                                      style={{ padding: '0.5rem 1rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem' }}
+                                    >
+                                      💬 Messages
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, marginLeft: '1rem' }}>
-                              {app.status === 'pending' && post.status === 'open' && (
-                                <>
-                                  <button
-                                    onClick={() => handleApprove(app.id, post.id)}
-                                    disabled={updating === app.id}
-                                    style={{ padding: '0.5rem 1rem', backgroundColor: updating === app.id ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
-                                  >
-                                    {updating === app.id ? 'Approving...' : 'Approve'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleDecline(app.id)}
-                                    disabled={updating === app.id}
-                                    style={{ padding: '0.5rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
-                                  >
-                                    Decline
-                                  </button>
-                                </>
-                              )}
-
-                              {app.status === 'approved' && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371' }}>
-                                    ✓ Approved
-                                  </span>
-                                  <Link
-                                    href={`/messages/${app.id}`}
-                                    style={{ padding: '0.5rem 1rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem' }}
-                                  >
-                                    💬 Messages
-                                  </Link>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
