@@ -15,10 +15,24 @@ export default function Posts() {
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) router.push('/login')
+      if (!user) { router.push('/login'); return }
       fetchPosts()
     }
     init()
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('posts-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'service_posts',
+      }, () => {
+        fetchPosts()
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [])
 
   const fetchPosts = async () => {
@@ -53,9 +67,17 @@ export default function Posts() {
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '3rem 1.5rem' }}>
 
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Community Requests</h1>
-          <p style={{ color: '#94B7A2' }}>{posts.length} open requests in your community</p>
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Community Requests</h1>
+            <p style={{ color: '#94B7A2', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {posts.length} open requests in your community
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#2FB774', fontWeight: 600 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2FB774', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+                Live
+              </span>
+            </p>
+          </div>
         </div>
 
         {/* Category Filter */}
@@ -86,7 +108,7 @@ export default function Posts() {
               <Link
                 key={post.id}
                 href={`/posts/${post.id}`}
-                style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', textDecoration: 'none', color: '#2A272A', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', display: 'block' }}
+                style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', textDecoration: 'none', color: '#2A272A', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', display: 'block', transition: 'border-color 0.2s' }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                   <div>
@@ -98,7 +120,7 @@ export default function Posts() {
                     <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
                   </div>
                 </div>
-                <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.description}</p>
+                <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1rem', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{post.description}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>Posted by {post.profiles?.full_name || post.profiles?.username}</span>
                   <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>{new Date(post.created_at).toLocaleDateString()}</span>
@@ -108,6 +130,14 @@ export default function Posts() {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
+
     </main>
   )
 }
