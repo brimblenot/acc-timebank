@@ -8,6 +8,13 @@ import Image from 'next/image'
 
 const EMOTE_MAP = { 1: '😶', 2: '🙂', 3: '😊', 4: '😄', 5: '🤩' }
 
+const SKILLS = [
+  'Cooking & Meals', 'Transportation', 'Home Repair', 'Gardening & Yard Work',
+  'Tech Help', 'Childcare', 'Pet Care', 'Tutoring & Education',
+  'Errands & Shopping', 'Translation', 'Healthcare Support',
+  'Music & Arts', 'Sewing & Crafts', 'Emotional Support', 'Other',
+]
+
 export default function ProfilePage() {
   const router = useRouter()
   const { id } = useParams()
@@ -18,6 +25,9 @@ export default function ProfilePage() {
   const [stats, setStats] = useState({ given: 0, received: 0 })
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [editData, setEditData] = useState({ full_name: '', bio: '', skills: [] })
+  const [saving, setSaving] = useState(false)
   const [donateModal, setDonateModal] = useState(false)
   const [donateAmount, setDonateAmount] = useState('')
   const [donating, setDonating] = useState(false)
@@ -38,6 +48,7 @@ export default function ProfilePage() {
 
       if (!profileRes.data) { setLoading(false); return }
       setProfile(profileRes.data)
+      setEditData({ full_name: profileRes.data.full_name || '', bio: profileRes.data.bio || '', skills: profileRes.data.skills || [] })
       setViewerBalance(viewerRes.data?.hour_balance ?? 0)
 
       // Stats
@@ -59,6 +70,27 @@ export default function ProfilePage() {
     }
     init()
   }, [id])
+
+  const handleSave = async () => {
+    setSaving(true)
+    const { error } = await supabase.from('profiles').update({
+      full_name: editData.full_name,
+      bio: editData.bio,
+      skills: editData.skills,
+    }).eq('id', id)
+    if (!error) {
+      setProfile(prev => ({ ...prev, full_name: editData.full_name, bio: editData.bio, skills: editData.skills }))
+      setEditing(false)
+    }
+    setSaving(false)
+  }
+
+  const toggleEditSkill = (skill) => {
+    setEditData(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skill) ? prev.skills.filter(s => s !== skill) : [...prev.skills, skill],
+    }))
+  }
 
   const handleDonate = async () => {
     const amount = parseInt(donateAmount)
@@ -112,17 +144,79 @@ export default function ProfilePage() {
             {initials}
           </div>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, marginBottom: '0.15rem' }}>{displayName}</h1>
-            {profile.username && profile.full_name && (
-              <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '0.5rem' }}>@{profile.username}</p>
+            {editing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Name</label>
+                  <input
+                    value={editData.full_name}
+                    onChange={e => setEditData(prev => ({ ...prev, full_name: e.target.value }))}
+                    style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.6rem 0.875rem', fontSize: '0.9rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Bio</label>
+                  <textarea
+                    value={editData.bio}
+                    onChange={e => setEditData(prev => ({ ...prev, bio: e.target.value }))}
+                    rows={3}
+                    placeholder="Tell the community about yourself..."
+                    style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.6rem 0.875rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Skills I can offer</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {SKILLS.map(skill => (
+                      <button
+                        key={skill}
+                        type="button"
+                        onClick={() => toggleEditSkill(skill)}
+                        style={{ padding: '0.3rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: editData.skills.includes(skill) ? '#237371' : '#F5F5F3', color: editData.skills.includes(skill) ? '#FEFFFF' : '#2A272A' }}
+                      >
+                        {skill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{ padding: '0.6rem 1.5rem', backgroundColor: saving ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setEditing(false); setEditData({ full_name: profile.full_name || '', bio: profile.bio || '', skills: profile.skills || [] }) }}
+                    style={{ padding: '0.6rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, marginBottom: '0.15rem' }}>{displayName}</h1>
+                {profile.username && profile.full_name && (
+                  <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '0.5rem' }}>@{profile.username}</p>
+                )}
+                {profile.bio && <p style={{ color: '#2A272A', fontSize: '0.9rem', lineHeight: 1.6 }}>{profile.bio}</p>}
+                {isOwnProfile && (
+                  <button
+                    onClick={() => setEditing(true)}
+                    style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}
+                  >
+                    ✏️ Edit Profile
+                  </button>
+                )}
+              </>
             )}
-            {profile.bio && <p style={{ color: '#2A272A', fontSize: '0.9rem', lineHeight: 1.6 }}>{profile.bio}</p>}
-            {isOwnProfile && <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.5rem' }}>This is your profile.</p>}
           </div>
         </div>
 
         {/* Skills */}
-        {(profile.skills || []).length > 0 && (
+        {!editing && (profile.skills || []).length > 0 && (
           <div style={{ marginBottom: '2rem' }}>
             <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Skills Offered</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
