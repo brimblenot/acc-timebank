@@ -16,6 +16,7 @@ export default function MyPosts() {
   const [reviewData, setReviewData] = useState({ rating: 5, comment: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
   const [currentUserId, setCurrentUserId] = useState(null)
+  const [completedAppId, setCompletedAppId] = useState(null)
 
   useEffect(() => {
     const init = async () => {
@@ -39,10 +40,22 @@ export default function MyPosts() {
 
   const handleApplication = async (applicationId, newStatus, postId) => {
     setUpdating(applicationId)
+
+    // Decline all other pending applications when approving one
+    if (newStatus === 'approved') {
+      const post = posts.find(p => p.id === postId)
+      const otherPending = post?.applications?.filter(a => a.id !== applicationId && a.status === 'pending') || []
+      for (const app of otherPending) {
+        await supabase.from('applications').update({ status: 'declined' }).eq('id', app.id)
+      }
+    }
+
     await supabase.from('applications').update({ status: newStatus }).eq('id', applicationId)
+
     if (newStatus === 'approved') {
       await supabase.from('service_posts').update({ status: 'in_progress' }).eq('id', postId)
     }
+
     fetchMyPosts(currentUserId)
     setUpdating(null)
   }
@@ -55,12 +68,7 @@ export default function MyPosts() {
     if (!approvedApp) {
       const pendingApp = post.applications.find(a => a.status === 'pending')
       if (!pendingApp) { alert('No applicant found.'); setCompleting(null); return }
-
-      await supabase
-        .from('applications')
-        .update({ status: 'approved' })
-        .eq('id', pendingApp.id)
-
+      await supabase.from('applications').update({ status: 'approved' }).eq('id', pendingApp.id)
       approvedApp = pendingApp
     }
 
@@ -73,10 +81,12 @@ export default function MyPosts() {
 
     if (error) { alert('Error: ' + error.message); setCompleting(null); return }
 
+    setCompletedAppId(approvedApp.id)
     fetchMyPosts(currentUserId)
     setCompleting(null)
     setReviewModal({
       postId: post.id,
+      applicationId: approvedApp.id,
       revieweeId: approvedApp.applicant_id,
       revieweeName: approvedApp.profiles?.full_name || approvedApp.profiles?.username
     })
@@ -143,7 +153,7 @@ export default function MyPosts() {
             {posts.map(post => {
               const sc = statusColor(post.status)
               const approvedApp = post.applications?.find(a => a.status === 'approved')
-              const pendingApps = post.applications?.filter(a => a.status === 'pending') || []
+              const visibleApps = post.applications?.filter(a => a.status !== 'declined') || []
 
               return (
                 <div key={post.id} style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', overflow: 'hidden', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}>
@@ -181,24 +191,32 @@ export default function MyPosts() {
                     )}
 
                     {post.status === 'completed' && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <p style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600 }}>✓ Service completed — {post.hours_required} hours transferred</p>
+                        {(approvedApp || completedAppId) && (
+                          <Link
+                            href={`/messages/${approvedApp?.id || completedAppId}`}
+                            style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}
+                          >
+                            💬 Messages
+                          </Link>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Applications */}
+                  {/* Applications — only show non-declined */}
                   <div style={{ padding: '1.5rem' }}>
                     <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
-                      Applications ({post.applications?.length || 0})
+                      Applications ({visibleApps.length})
                     </p>
 
-                    {post.applications?.length === 0 ? (
+                    {visibleApps.length === 0 ? (
                       <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No applications yet.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {post.applications.map(app => (
-                          <div key={app.id} style={{ backgroundColor: '#F5F5F3', borderRadius: '0.75rem', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #E0E0DC' }}>
+                        {visibleApps.map(app => (
+                          <div key={app.id} style={{ backgroundColor: app.status === 'approved' ? '#EBF5F0' : '#F5F5F3', borderRadius: '0.75rem', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: app.status === 'approved' ? '1px solid #94B7A2' : '1px solid #E0E0DC' }}>
                             <div>
                               <Link href={`/profile/${app.profiles?.id}`} style={{ fontWeight: 700, color: '#237371', textDecoration: 'none', fontSize: '0.9rem' }}>
                                 {app.profiles?.full_name || app.profiles?.username}
@@ -208,7 +226,7 @@ export default function MyPosts() {
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, marginLeft: '1rem' }}>
-                              {app.status === 'pending' && post.status !== 'in_progress' && post.status !== 'completed' ? (
+                              {app.status === 'pending' && post.status === 'open' ? (
                                 <>
                                   <button
                                     onClick={() => handleApplication(app.id, 'approved', post.id)}
@@ -225,17 +243,22 @@ export default function MyPosts() {
                                     Decline
                                   </button>
                                 </>
-                              ) : (
+                              ) : app.status === 'approved' ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: app.status === 'approved' ? '#EBF5F0' : app.status === 'declined' ? '#fdf0ef' : '#F5F5F3', color: app.status === 'approved' ? '#237371' : app.status === 'declined' ? '#c0392b' : '#94B7A2' }}>
-                                    {app.status}
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371' }}>
+                                    ✓ Approved
                                   </span>
-                                  {app.status === 'approved' && (
-                                    <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem' }}>
-                                      Messages →
-                                    </Link>
-                                  )}
+                                  <Link
+                                    href={`/messages/${app.id}`}
+                                    style={{ padding: '0.5rem 1rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem' }}
+                                  >
+                                    💬 Messages
+                                  </Link>
                                 </div>
+                              ) : (
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2' }}>
+                                  {app.status}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -298,6 +321,16 @@ export default function MyPosts() {
               >
                 Skip
               </button>
+            </div>
+
+            {/* Message button after review */}
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', textAlign: 'center' }}>
+              <Link
+                href={`/messages/${reviewModal.applicationId}`}
+                style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}
+              >
+                💬 Go to Messages with {reviewModal.revieweeName}
+              </Link>
             </div>
           </div>
         </div>
