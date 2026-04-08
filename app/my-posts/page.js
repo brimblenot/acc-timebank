@@ -25,19 +25,10 @@ export default function MyPosts() {
       setCurrentUserId(user.id)
       await fetchMyPosts(user.id)
 
-      // Realtime — refetch when applications or posts change
       const channel = supabase
         .channel('my-posts-realtime')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'applications',
-        }, () => fetchMyPosts(user.id))
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'service_posts',
-        }, () => fetchMyPosts(user.id))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => fetchMyPosts(user.id))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_posts' }, () => fetchMyPosts(user.id))
         .subscribe()
 
       return () => supabase.removeChannel(channel)
@@ -48,63 +39,63 @@ export default function MyPosts() {
   const fetchMyPosts = async (userId) => {
     const uid = userId || currentUserId
     if (!uid) return
-
     const { data } = await supabase
       .from('service_posts')
-      .select(`
-        *,
-        applications (
-          id, status, created_at, applicant_id,
-          profiles (id, full_name, username, bio)
-        )
-      `)
+      .select(`*, applications (id, status, created_at, applicant_id, profiles (id, full_name, username, bio))`)
       .eq('poster_id', uid)
       .order('created_at', { ascending: false })
-
     setPosts(data || [])
     setLoading(false)
   }
 
-  const handleApplication = async (applicationId, newStatus, postId) => {
+  const handleApprove = async (applicationId, postId) => {
     setUpdating(applicationId)
 
-    if (newStatus === 'approved') {
-      // Step 1: Approve selected applicant
-      const { error: approveError } = await supabase
+    // Approve selected
+    const { error: e1 } = await supabase
+      .from('applications')
+      .update({ status: 'approved' })
+      .eq('id', applicationId)
+
+    if (e1) { console.error('Approve error:', e1); setUpdating(null); return }
+
+    // Get all other pending apps
+    const { data: others, error: e2 } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('status', 'pending')
+
+    if (e2) console.error('Fetch others error:', e2)
+
+    // Decline each other one
+    for (const app of others || []) {
+      const { error: e3 } = await supabase
         .from('applications')
-        .update({ status: 'approved' })
-        .eq('id', applicationId)
-
-      if (approveError) { console.error(approveError); setUpdating(null); return }
-
-      // Step 2: Get all other pending applications for this post
-      const { data: otherApps } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-
-      // Step 3: Decline each remaining one
-      for (const app of otherApps || []) {
-        await supabase
-          .from('applications')
-          .update({ status: 'declined' })
-          .eq('id', app.id)
-      }
-
-      // Step 4: Set post to in_progress
-      await supabase
-        .from('service_posts')
-        .update({ status: 'in_progress' })
-        .eq('id', postId)
-
-    } else {
-      await supabase
-        .from('applications')
-        .update({ status: newStatus })
-        .eq('id', applicationId)
+        .update({ status: 'declined' })
+        .eq('id', app.id)
+      if (e3) console.error('Decline error:', e3)
     }
 
+    // Set post in_progress
+    const { error: e4 } = await supabase
+      .from('service_posts')
+      .update({ status: 'in_progress' })
+      .eq('id', postId)
+
+    if (e4) console.error('Post update error:', e4)
+
+    await fetchMyPosts(currentUserId)
+    setUpdating(null)
+  }
+
+  const handleDecline = async (applicationId) => {
+    setUpdating(applicationId)
+    const { error } = await supabase
+      .from('applications')
+      .update({ status: 'declined' })
+      .eq('id', applicationId)
+    if (error) console.error('Decline error:', error)
     await fetchMyPosts(currentUserId)
     setUpdating(null)
   }
@@ -224,31 +215,28 @@ export default function MyPosts() {
                     </div>
 
                     {/* In Progress Banner */}
-                    {post.status === 'in_progress' && (
+                    {post.status === 'in_progress' && approvedApp && (
                       <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
-                        <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.75rem', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                          <div>
-                            <p style={{ color: '#237371', fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.15rem' }}>
-                              {approvedApp
-                                ? `Working with ${approvedApp.profiles?.full_name || approvedApp.profiles?.username}`
-                                : 'Service in progress'
-                              }
-                            </p>
-                            <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>Mark complete when the service is done to transfer hours.</p>
+                        <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.75rem', padding: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                            <div>
+                              <p style={{ color: '#237371', fontWeight: 700, fontSize: '0.875rem' }}>
+                                Working with {approvedApp.profiles?.full_name || approvedApp.profiles?.username}
+                              </p>
+                              <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>Mark complete when the service is done to transfer hours.</p>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
-                            {approvedApp && (
-                              <Link
-                                href={`/messages/${approvedApp.id}`}
-                                style={{ padding: '0.6rem 1rem', backgroundColor: '#FEFFFF', color: '#237371', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem', border: '1px solid #237371' }}
-                              >
-                                💬 Messages
-                              </Link>
-                            )}
+                          <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <Link
+                              href={`/messages/${approvedApp.id}`}
+                              style={{ flex: 1, padding: '0.7rem 1rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', textAlign: 'center' }}
+                            >
+                              💬 Message {approvedApp.profiles?.full_name || approvedApp.profiles?.username}
+                            </Link>
                             <button
                               onClick={() => handleComplete(post)}
                               disabled={completing === post.id}
-                              style={{ padding: '0.6rem 1.25rem', backgroundColor: completing === post.id ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: completing === post.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                              style={{ flex: 1, padding: '0.7rem 1rem', backgroundColor: completing === post.id ? '#E0E0DC' : '#2A272A', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: completing === post.id ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
                             >
                               {completing === post.id ? 'Processing...' : '✓ Mark Complete'}
                             </button>
@@ -262,7 +250,7 @@ export default function MyPosts() {
                       <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
                         <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.75rem', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <p style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600 }}>
-                            ✓ Service completed — {post.hours_required} hours transferred
+                            ✓ Completed — {post.hours_required} hours transferred
                             {approvedApp && ` to ${approvedApp.profiles?.full_name || approvedApp.profiles?.username}`}
                           </p>
                           {(approvedApp || completedAppId) && (
@@ -278,7 +266,7 @@ export default function MyPosts() {
                     )}
                   </div>
 
-                  {/* Applications — only show non-declined */}
+                  {/* Applications */}
                   <div style={{ padding: '1.5rem' }}>
                     <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
                       Applications ({visibleApps.length})
@@ -310,18 +298,17 @@ export default function MyPosts() {
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, marginLeft: '1rem' }}>
-                              {/* Open post — show approve/decline */}
                               {app.status === 'pending' && post.status === 'open' && (
                                 <>
                                   <button
-                                    onClick={() => handleApplication(app.id, 'approved', post.id)}
+                                    onClick={() => handleApprove(app.id, post.id)}
                                     disabled={updating === app.id}
                                     style={{ padding: '0.5rem 1rem', backgroundColor: updating === app.id ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                                   >
                                     {updating === app.id ? 'Approving...' : 'Approve'}
                                   </button>
                                   <button
-                                    onClick={() => handleApplication(app.id, 'declined', post.id)}
+                                    onClick={() => handleDecline(app.id)}
                                     disabled={updating === app.id}
                                     style={{ padding: '0.5rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: updating === app.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                                   >
@@ -330,7 +317,6 @@ export default function MyPosts() {
                                 </>
                               )}
 
-                              {/* Approved — green badge + messages button */}
                               {app.status === 'approved' && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                   <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371' }}>
@@ -369,11 +355,7 @@ export default function MyPosts() {
               <p style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Rating</p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {[1, 2, 3, 4, 5].map(star => (
-                  <button
-                    key={star}
-                    onClick={() => setReviewData({ ...reviewData, rating: star })}
-                    style={{ fontSize: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewData.rating ? '#D4A017' : '#E0E0DC', padding: 0 }}
-                  >★</button>
+                  <button key={star} onClick={() => setReviewData({ ...reviewData, rating: star })} style={{ fontSize: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewData.rating ? '#D4A017' : '#E0E0DC', padding: 0 }}>★</button>
                 ))}
               </div>
             </div>
@@ -390,26 +372,14 @@ export default function MyPosts() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button
-                onClick={submitReview}
-                disabled={submittingReview}
-                style={{ flex: 1, padding: '0.875rem', backgroundColor: submittingReview ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: submittingReview ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
-              >
+              <button onClick={submitReview} disabled={submittingReview} style={{ flex: 1, padding: '0.875rem', backgroundColor: submittingReview ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: submittingReview ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}>
                 {submittingReview ? 'Submitting...' : 'Submit Review'}
               </button>
-              <button
-                onClick={() => setReviewModal(null)}
-                style={{ padding: '0.875rem 1.5rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
-              >
-                Skip
-              </button>
+              <button onClick={() => setReviewModal(null)} style={{ padding: '0.875rem 1.5rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}>Skip</button>
             </div>
 
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', textAlign: 'center' }}>
-              <Link
-                href={`/messages/${reviewModal.applicationId}`}
-                style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}
-              >
+              <Link href={`/messages/${reviewModal.applicationId}`} style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}>
                 💬 Go to Messages with {reviewModal.revieweeName}
               </Link>
             </div>
