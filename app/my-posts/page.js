@@ -45,38 +45,49 @@ export default function MyPosts() {
   }
 
   const handleApplication = async (applicationId, newStatus, postId) => {
-    setUpdating(applicationId)
+  setUpdating(applicationId)
 
-    if (newStatus === 'approved') {
-      // First approve the selected application
-      await supabase
-        .from('applications')
-        .update({ status: 'approved' })
-        .eq('id', applicationId)
+  if (newStatus === 'approved') {
+    // Step 1: Approve the selected applicant
+    const { error: approveError } = await supabase
+      .from('applications')
+      .update({ status: 'approved' })
+      .eq('id', applicationId)
 
-      // Then decline all other pending applications for this post
+    if (approveError) { console.error(approveError); setUpdating(null); return }
+
+    // Step 2: Get all OTHER pending applications for this post
+    const { data: otherApps } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('status', 'pending')
+
+    // Step 3: Decline each one individually
+    for (const app of otherApps || []) {
       await supabase
         .from('applications')
         .update({ status: 'declined' })
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-        .neq('id', applicationId)
-
-      // Set post to in_progress
-      await supabase
-        .from('service_posts')
-        .update({ status: 'in_progress' })
-        .eq('id', postId)
-    } else {
-      await supabase
-        .from('applications')
-        .update({ status: newStatus })
-        .eq('id', applicationId)
+        .eq('id', app.id)
     }
 
-    await fetchMyPosts(currentUserId)
-    setUpdating(null)
+    // Step 4: Set post to in_progress
+    await supabase
+      .from('service_posts')
+      .update({ status: 'in_progress' })
+      .eq('id', postId)
+
+  } else {
+    await supabase
+      .from('applications')
+      .update({ status: newStatus })
+      .eq('id', applicationId)
   }
+
+  // Step 5: Refetch after all operations complete
+  await fetchMyPosts(currentUserId)
+  setUpdating(null)
+}
 
   const handleComplete = async (post) => {
     setCompleting(post.id)
