@@ -15,6 +15,9 @@ export default function PostDetail() {
   const [loading, setLoading] = useState(true)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
+  const [userApplicationId, setUserApplicationId] = useState(null)
+  const [userApplicationStatus, setUserApplicationStatus] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -60,9 +63,23 @@ export default function PostDetail() {
     setApplications(apps || [])
 
     const alreadyApplied = (apps || []).find(a => a.applicant_id === userId)
-    if (alreadyApplied) setApplied(true)
+    if (alreadyApplied) {
+      setApplied(true)
+      setUserApplicationId(alreadyApplied.id)
+      setUserApplicationStatus(alreadyApplied.status)
+    }
 
     setLoading(false)
+  }
+
+  const handleCancelApplication = async () => {
+    if (!userApplicationId) return
+    setCancelling(true)
+    await supabase.from('applications').delete().eq('id', userApplicationId)
+    setApplied(false)
+    setUserApplicationId(null)
+    setUserApplicationStatus(null)
+    setCancelling(false)
   }
 
   const handleApply = async () => {
@@ -380,6 +397,15 @@ export default function PostDetail() {
           <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
             <p style={{ color: '#237371', fontWeight: 700 }}>✓ You've applied to this request</p>
             <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginTop: '0.25rem' }}>The requester will review your application.</p>
+            {userApplicationStatus === 'pending' && post.status === 'open' && (
+              <button
+                onClick={handleCancelApplication}
+                disabled={cancelling}
+                style={{ marginTop: '1rem', padding: '0.5rem 1.25rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: cancelling ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Application'}
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem' }}>

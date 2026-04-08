@@ -9,6 +9,7 @@ import Image from 'next/image'
 export default function MyPosts() {
   const router = useRouter()
   const [posts, setPosts] = useState([])
+  const [activeExchanges, setActiveExchanges] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
   const [completing, setCompleting] = useState(null)
@@ -25,7 +26,7 @@ export default function MyPosts() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
-      await fetchMyPosts(user.id)
+      await Promise.all([fetchMyPosts(user.id), fetchActiveExchanges(user.id)])
 
       const channel = supabase
         .channel('my-posts-realtime')
@@ -37,6 +38,22 @@ export default function MyPosts() {
     }
     init()
   }, [])
+
+  const fetchActiveExchanges = async (userId) => {
+    const { data } = await supabase
+      .from('applications')
+      .select(`
+        id, status, created_at,
+        service_posts (
+          id, title, description, category, hours_required, status, poster_id,
+          profiles (id, full_name, username)
+        )
+      `)
+      .eq('applicant_id', userId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+    setActiveExchanges(data || [])
+  }
 
   const fetchMyPosts = async (userId) => {
     const uid = userId || currentUserId
@@ -180,6 +197,69 @@ export default function MyPosts() {
         <div style={{ marginBottom: '2.5rem' }}>
           <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>My Posts</h1>
           <p style={{ color: '#94B7A2' }}>Manage your service requests and review applicants.</p>
+        </div>
+
+        {/* Active Exchanges — posts where the user was accepted as helper */}
+        {activeExchanges.length > 0 && (
+          <div style={{ marginBottom: '3rem' }}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.15rem' }}>Active Exchanges</h2>
+              <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>Posts you've been accepted to help with.</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {activeExchanges.map(app => {
+                const post = app.service_posts
+                if (!post) return null
+                const isCompleted = post.status === 'completed'
+                return (
+                  <div
+                    key={app.id}
+                    style={{
+                      backgroundColor: isCompleted ? '#FAFAFA' : '#FEFFFF',
+                      border: '1px solid #E0E0DC',
+                      borderRadius: '1rem',
+                      padding: '1.5rem',
+                      boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
+                      opacity: isCompleted ? 0.8 : 1,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{post.category}</span>
+                          <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: isCompleted ? '#F5F5F3' : '#EBF5F0', color: isCompleted ? '#94B7A2' : '#237371', border: '1px solid #E0E0DC' }}>
+                            {isCompleted ? 'Completed' : 'In Progress'}
+                          </span>
+                        </div>
+                        <h3 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#2A272A' }}>{post.title}</h3>
+                        <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                          Requested by{' '}
+                          <Link href={`/profile/${post.profiles?.id}`} style={{ color: '#237371', textDecoration: 'none', fontWeight: 600 }}>
+                            {post.profiles?.full_name || post.profiles?.username}
+                          </Link>
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
+                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>{post.hours_required}</p>
+                        <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/messages/${app.id}`}
+                      style={{ display: 'inline-block', padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}
+                    >
+                      💬 Messages
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '1.25rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.15rem' }}>My Requests</h2>
+          <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>Posts you've created and their applicants.</p>
         </div>
 
         {posts.length === 0 ? (

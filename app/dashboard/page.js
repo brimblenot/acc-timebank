@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [stats, setStats] = useState({ activePosts: 0, servicesGiven: 0, servicesReceived: 0 })
+  const [unreadMap, setUnreadMap] = useState({})
   const bottomRef = useRef(null)
   const messagesRef = useRef([])
   const channelRef = useRef(null)
@@ -33,7 +34,7 @@ export default function Dashboard() {
         .single()
 
       setProfile(data)
-      fetchConversations(user.id)
+      await fetchConversations(user.id)
       fetchStats(user.id)
       setLoading(false)
     }
@@ -101,14 +102,55 @@ export default function Dashboard() {
       ...(asPoster || []).map(a => ({ id: a.id, title: a.service_posts?.title, otherPerson: a.profiles?.full_name || a.profiles?.username })),
     ]
     setConversations(all)
+
+    if (!all.length) return
+    try {
+      const appIds = all.map(c => c.id)
+
+      const { data: reads, error } = await supabase
+        .from('conversation_reads')
+        .select('application_id, last_read_at')
+        .eq('user_id', userId)
+        .in('application_id', appIds)
+
+      if (error) return
+
+      const readsMap = {}
+      reads?.forEach(r => { readsMap[r.application_id] = r.last_read_at })
+
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('application_id, created_at, sender_id')
+        .in('application_id', appIds)
+        .neq('sender_id', userId)
+
+      const counts = {}
+      msgs?.forEach(m => {
+        const lastRead = readsMap[m.application_id]
+        if (!lastRead || new Date(m.created_at) > new Date(lastRead)) {
+          counts[m.application_id] = (counts[m.application_id] || 0) + 1
+        }
+      })
+      setUnreadMap(counts)
+    } catch { /* conversation_reads table may not exist yet */ }
   }
 
   const openConversation = async (convo) => {
     setActiveConvo(convo)
     setMessages([])
     messagesRef.current = []
+    setUnreadMap(prev => ({ ...prev, [convo.id]: 0 }))
 
     if (channelRef.current) supabase.removeChannel(channelRef.current)
+
+    // Mark conversation as read
+    if (profile) {
+      try {
+        await supabase
+          .from('conversation_reads')
+          .upsert({ user_id: profile.id, application_id: convo.id, last_read_at: new Date().toISOString() })
+      } catch { /* table may not exist yet */ }
+    }
 
     const { data } = await supabase
       .from('messages')
@@ -216,8 +258,13 @@ export default function Dashboard() {
           ))}
           <button
             onClick={() => setMessagesOpen(true)}
-            style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem', textAlign: 'left', cursor: 'pointer', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}
+            style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem', textAlign: 'left', cursor: 'pointer', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', position: 'relative' }}
           >
+            {Object.values(unreadMap).reduce((a, b) => a + b, 0) > 0 && (
+              <span style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', backgroundColor: '#c0392b', color: '#FEFFFF', borderRadius: '9999px', fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                {Object.values(unreadMap).reduce((a, b) => a + b, 0)}
+              </span>
+            )}
             <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>💬</div>
             <h3 style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.25rem', color: '#2A272A' }}>Messages</h3>
             <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>{conversations.length > 0 ? `${conversations.length} active` : 'No active chats'}</p>
@@ -266,11 +313,18 @@ export default function Dashboard() {
                     onClick={() => openConversation(convo)}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.5rem', background: activeConvo?.id === convo.id ? '#F5F5F3' : 'none', border: 'none', borderBottom: '1px solid #E0E0DC', cursor: 'pointer', textAlign: 'left', borderLeft: activeConvo?.id === convo.id ? '3px solid #237371' : '3px solid transparent' }}
                   >
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#237371', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FEFFFF', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>
-                      {convo.otherPerson?.[0]?.toUpperCase() || '?'}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#237371', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FEFFFF', fontWeight: 700, fontSize: '0.875rem' }}>
+                        {convo.otherPerson?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      {unreadMap[convo.id] > 0 && (
+                        <span style={{ position: 'absolute', top: '-3px', right: '-3px', backgroundColor: '#c0392b', color: '#FEFFFF', borderRadius: '9999px', fontSize: '0.6rem', fontWeight: 700, minWidth: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid #FEFFFF' }}>
+                          {unreadMap[convo.id] > 99 ? '99+' : unreadMap[convo.id]}
+                        </span>
+                      )}
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: '0.875rem', color: '#2A272A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{convo.otherPerson}</p>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontWeight: unreadMap[convo.id] > 0 ? 700 : 600, fontSize: '0.875rem', color: '#2A272A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{convo.otherPerson}</p>
                       <p style={{ color: '#94B7A2', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{convo.title}</p>
                     </div>
                   </button>

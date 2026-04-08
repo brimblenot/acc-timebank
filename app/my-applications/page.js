@@ -16,6 +16,7 @@ export default function MyApplications() {
   const [submittingReview, setSubmittingReview] = useState(false)
   const [reviewedPosts, setReviewedPosts] = useState([])
   const [dismissing, setDismissing] = useState(null)
+  const [cancelling, setCancelling] = useState(null)
 
   useEffect(() => {
     const init = async () => {
@@ -51,6 +52,13 @@ export default function MyApplications() {
     setReviewedPosts((existingReviews || []).map(r => r.post_id))
     setApplications(data || [])
     setLoading(false)
+  }
+
+  const handleCancel = async (applicationId) => {
+    setCancelling(applicationId)
+    await supabase.from('applications').delete().eq('id', applicationId)
+    setApplications(prev => prev.filter(a => a.id !== applicationId))
+    setCancelling(null)
   }
 
   const handleDismiss = async (applicationId) => {
@@ -224,6 +232,15 @@ export default function MyApplications() {
                     </span>
 
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      {postStatus === 'pending' && app.service_posts?.status === 'open' && (
+                        <button
+                          onClick={() => handleCancel(app.id)}
+                          disabled={cancelling === app.id}
+                          style={{ padding: '0.5rem 1.25rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: cancelling === app.id ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                        >
+                          {cancelling === app.id ? 'Cancelling...' : 'Cancel Application'}
+                        </button>
+                      )}
                       {(postStatus === 'approved' || postStatus === 'completed') && (
                         <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}>
                           💬 Messages
