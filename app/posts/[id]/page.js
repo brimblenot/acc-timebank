@@ -15,6 +15,8 @@ export default function PostDetail() {
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
   const [error, setError] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -46,14 +48,38 @@ export default function PostDetail() {
   const handleApply = async () => {
     setApplying(true)
     setError(null)
-
     const { error } = await supabase
       .from('applications')
       .insert({ post_id: id, applicant_id: currentUser.id })
-
     if (error) setError(error.message)
     else setApplied(true)
     setApplying(false)
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+
+    // Get all application ids for this post
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('post_id', id)
+
+    // Delete messages first
+    if (apps?.length > 0) {
+      await supabase
+        .from('messages')
+        .delete()
+        .in('application_id', apps.map(a => a.id))
+    }
+
+    // Delete applications
+    await supabase.from('applications').delete().eq('post_id', id)
+
+    // Delete post
+    await supabase.from('service_posts').delete().eq('id', id)
+
+    router.push('/posts')
   }
 
   if (loading) return (
@@ -69,6 +95,7 @@ export default function PostDetail() {
   )
 
   const isOwner = currentUser?.id === post.poster_id
+  const isDeletable = isOwner && post.status === 'open'
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
@@ -103,16 +130,51 @@ export default function PostDetail() {
 
         <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem' }}>
           <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Posted By</p>
-          <p style={{ fontWeight: 700, color: '#2A272A' }}>{post.profiles?.full_name || post.profiles?.username}</p>
+          <Link href={`/profile/${post.poster_id}`} style={{ fontWeight: 700, color: '#237371', textDecoration: 'none' }}>
+            {post.profiles?.full_name || post.profiles?.username}
+          </Link>
           {post.profiles?.bio && <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginTop: '0.25rem' }}>{post.profiles.bio}</p>}
           <p style={{ color: '#94B7A2', fontSize: '0.75rem', marginTop: '0.5rem' }}>
             {new Date(post.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
 
+        {/* Action area */}
         {isOwner ? (
-          <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
-            <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>This is your post. You'll be notified when someone applies.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
+              <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>This is your post. You'll be notified when someone applies.</p>
+            </div>
+
+            {isDeletable && (
+              <div style={{ textAlign: 'right' }}>
+                {deleteConfirm ? (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.75rem', padding: '1rem' }}>
+                    <p style={{ color: '#c0392b', fontSize: '0.875rem', fontWeight: 600 }}>Are you sure? This cannot be undone.</p>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      style={{ padding: '0.5rem 1.25rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                    >
+                      {deleting ? 'Deleting...' : 'Yes, Delete'}
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(false)}
+                      style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    style={{ padding: '0.6rem 1.5rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: 'pointer', fontSize: '0.875rem' }}
+                  >
+                    Delete Post
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : applied ? (
           <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
