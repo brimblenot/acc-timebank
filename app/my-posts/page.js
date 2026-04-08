@@ -23,12 +23,32 @@ export default function MyPosts() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
-      fetchMyPosts(user.id)
+      await fetchMyPosts(user.id)
+
+      // Realtime — refetch when applications or posts change
+      const channel = supabase
+        .channel('my-posts-realtime')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'applications',
+        }, () => fetchMyPosts(user.id))
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'service_posts',
+        }, () => fetchMyPosts(user.id))
+        .subscribe()
+
+      return () => supabase.removeChannel(channel)
     }
     init()
   }, [])
 
   const fetchMyPosts = async (userId) => {
+    const uid = userId || currentUserId
+    if (!uid) return
+
     const { data } = await supabase
       .from('service_posts')
       .select(`
@@ -38,56 +58,56 @@ export default function MyPosts() {
           profiles (id, full_name, username, bio)
         )
       `)
-      .eq('poster_id', userId)
+      .eq('poster_id', uid)
       .order('created_at', { ascending: false })
+
     setPosts(data || [])
     setLoading(false)
   }
 
   const handleApplication = async (applicationId, newStatus, postId) => {
-  setUpdating(applicationId)
+    setUpdating(applicationId)
 
-  if (newStatus === 'approved') {
-    // Step 1: Approve the selected applicant
-    const { error: approveError } = await supabase
-      .from('applications')
-      .update({ status: 'approved' })
-      .eq('id', applicationId)
+    if (newStatus === 'approved') {
+      // Step 1: Approve selected applicant
+      const { error: approveError } = await supabase
+        .from('applications')
+        .update({ status: 'approved' })
+        .eq('id', applicationId)
 
-    if (approveError) { console.error(approveError); setUpdating(null); return }
+      if (approveError) { console.error(approveError); setUpdating(null); return }
 
-    // Step 2: Get all OTHER pending applications for this post
-    const { data: otherApps } = await supabase
-      .from('applications')
-      .select('id')
-      .eq('post_id', postId)
-      .eq('status', 'pending')
+      // Step 2: Get all other pending applications for this post
+      const { data: otherApps } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('status', 'pending')
 
-    // Step 3: Decline each one individually
-    for (const app of otherApps || []) {
+      // Step 3: Decline each remaining one
+      for (const app of otherApps || []) {
+        await supabase
+          .from('applications')
+          .update({ status: 'declined' })
+          .eq('id', app.id)
+      }
+
+      // Step 4: Set post to in_progress
+      await supabase
+        .from('service_posts')
+        .update({ status: 'in_progress' })
+        .eq('id', postId)
+
+    } else {
       await supabase
         .from('applications')
-        .update({ status: 'declined' })
-        .eq('id', app.id)
+        .update({ status: newStatus })
+        .eq('id', applicationId)
     }
 
-    // Step 4: Set post to in_progress
-    await supabase
-      .from('service_posts')
-      .update({ status: 'in_progress' })
-      .eq('id', postId)
-
-  } else {
-    await supabase
-      .from('applications')
-      .update({ status: newStatus })
-      .eq('id', applicationId)
+    await fetchMyPosts(currentUserId)
+    setUpdating(null)
   }
-
-  // Step 5: Refetch after all operations complete
-  await fetchMyPosts(currentUserId)
-  setUpdating(null)
-}
 
   const handleComplete = async (post) => {
     setCompleting(post.id)
@@ -97,12 +117,7 @@ export default function MyPosts() {
     if (!approvedApp) {
       const pendingApp = post.applications.find(a => a.status === 'pending')
       if (!pendingApp) { alert('No applicant found.'); setCompleting(null); return }
-
-      await supabase
-        .from('applications')
-        .update({ status: 'approved' })
-        .eq('id', pendingApp.id)
-
+      await supabase.from('applications').update({ status: 'approved' }).eq('id', pendingApp.id)
       approvedApp = pendingApp
     }
 
@@ -130,7 +145,6 @@ export default function MyPosts() {
   const submitReview = async () => {
     if (!reviewModal) return
     setSubmittingReview(true)
-
     await supabase.from('reviews').insert({
       post_id: reviewModal.postId,
       reviewer_id: currentUserId,
@@ -138,7 +152,6 @@ export default function MyPosts() {
       rating: reviewData.rating,
       comment: reviewData.comment || null,
     })
-
     setReviewModal(null)
     setReviewData({ rating: 5, comment: '' })
     setSubmittingReview(false)
@@ -265,7 +278,7 @@ export default function MyPosts() {
                     )}
                   </div>
 
-                  {/* Applications */}
+                  {/* Applications — only show non-declined */}
                   <div style={{ padding: '1.5rem' }}>
                     <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
                       Applications ({visibleApps.length})
@@ -317,7 +330,7 @@ export default function MyPosts() {
                                 </>
                               )}
 
-                              {/* Approved — show badge and messages */}
+                              {/* Approved — green badge + messages button */}
                               {app.status === 'approved' && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                   <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371' }}>
@@ -330,13 +343,6 @@ export default function MyPosts() {
                                     💬 Messages
                                   </Link>
                                 </div>
-                              )}
-
-                              {/* Pending on in_progress/completed post — shouldn't happen but safety net */}
-                              {app.status === 'pending' && post.status !== 'open' && (
-                                <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2' }}>
-                                  pending
-                                </span>
                               )}
                             </div>
                           </div>
@@ -367,9 +373,7 @@ export default function MyPosts() {
                     key={star}
                     onClick={() => setReviewData({ ...reviewData, rating: star })}
                     style={{ fontSize: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewData.rating ? '#D4A017' : '#E0E0DC', padding: 0 }}
-                  >
-                    ★
-                  </button>
+                  >★</button>
                 ))}
               </div>
             </div>
