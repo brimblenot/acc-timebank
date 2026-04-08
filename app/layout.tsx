@@ -25,7 +25,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${nunito.variable}`}>
-      <body style={{ fontFamily: 'var(--font-nunito)', backgroundColor: '#2A272A', color: '#FEFFFF' }}>
+      <body style={{ fontFamily: 'var(--font-nunito)', margin: 0, padding: 0 }}>
         {children}
       </body>
     </html>

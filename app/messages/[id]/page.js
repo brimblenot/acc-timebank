@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function MessageThread() {
   const router = useRouter()
@@ -25,25 +26,13 @@ export default function MessageThread() {
 
       const { data: app } = await supabase
         .from('applications')
-        .select(`
-          *,
-          service_posts (
-            id, title, hours_required, poster_id,
-            profiles (id, full_name, username)
-          ),
-          profiles (id, full_name, username)
-        `)
+        .select(`*, service_posts (id, title, hours_required, poster_id, profiles (id, full_name, username)), profiles (id, full_name, username)`)
         .eq('id', id)
         .single()
 
-      if (!app || app.status !== 'approved') {
-        router.push('/dashboard')
-        return
-      }
-
+      if (!app || app.status !== 'approved') { router.push('/dashboard'); return }
       setApplication(app)
 
-      // Load initial messages
       const { data: initialMessages } = await supabase
         .from('messages')
         .select('*')
@@ -54,33 +43,20 @@ export default function MessageThread() {
       setMessages(initialMessages || [])
       setLoading(false)
 
-      // Realtime subscription
       const channel = supabase
         .channel(`room-${id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `application_id=eq.${id}`,
-          },
-          (payload) => {
-            const newMsg = payload.new
-            const already = messagesRef.current.find(m => m.id === newMsg.id)
-            if (!already) {
-              messagesRef.current = [...messagesRef.current, newMsg]
-              setMessages([...messagesRef.current])
-            }
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `application_id=eq.${id}` }, (payload) => {
+          const newMsg = payload.new
+          const already = messagesRef.current.find(m => m.id === newMsg.id)
+          if (!already) {
+            messagesRef.current = [...messagesRef.current, newMsg]
+            setMessages([...messagesRef.current])
           }
-        )
+        })
         .subscribe()
 
-      return () => {
-        supabase.removeChannel(channel)
-      }
+      return () => supabase.removeChannel(channel)
     }
-
     init()
   }, [id])
 
@@ -92,102 +68,78 @@ export default function MessageThread() {
     e.preventDefault()
     if (!newMessage.trim() || !currentUser) return
     setSending(true)
-
     const content = newMessage.trim()
     setNewMessage('')
-
-    await supabase.from('messages').insert({
-      application_id: id,
-      sender_id: currentUser.id,
-      content,
-    })
-
+    await supabase.from('messages').insert({ application_id: id, sender_id: currentUser.id, content })
     setSending(false)
   }
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center">
-        <p className="text-stone-400">Loading...</p>
-      </main>
-    )
-  }
+  if (loading) return (
+    <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: '#94B7A2' }}>Loading...</p>
+    </main>
+  )
 
   const otherPerson = currentUser?.id === application.service_posts.poster_id
     ? application.profiles
     : application.service_posts.profiles
 
   return (
-    <main className="min-h-screen bg-stone-950 text-stone-100 flex flex-col">
+    <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A', display: 'flex', flexDirection: 'column' }}>
 
-      {/* Nav */}
-      <nav className="flex justify-between items-center px-8 py-5 border-b border-stone-800 shrink-0">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight text-emerald-400">
-          ACC Timebank
+      <nav style={{ borderBottom: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2.5rem', backgroundColor: '#FEFFFF', flexShrink: 0 }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+          <Image src="/acc-logo.png" alt="ACC Logo" width={40} height={40} />
+          <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
         </Link>
-        <Link href="/my-applications" className="text-sm text-stone-400 hover:text-white transition">
-          ← Back
-        </Link>
+        <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>← Back</Link>
       </nav>
 
-      {/* Thread Header */}
-      <div className="px-8 py-4 border-b border-stone-800 bg-stone-900 shrink-0">
-        <p className="text-xs text-stone-500 uppercase tracking-widest mb-1">Service Exchange</p>
-        <h1 className="font-bold text-lg">{application.service_posts.title}</h1>
-        <p className="text-stone-400 text-sm">
+      <div style={{ padding: '1rem 2.5rem', borderBottom: '1px solid #E0E0DC', backgroundColor: '#F5F5F3', flexShrink: 0 }}>
+        <p style={{ fontSize: '0.7rem', color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '0.25rem' }}>Service Exchange</p>
+        <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, color: '#2A272A' }}>{application.service_posts.title}</h1>
+        <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>
           Chatting with {otherPerson?.full_name || otherPerson?.username} · {application.service_posts.hours_required} hours
         </p>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-3">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {messages.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-stone-400">No messages yet. Say hello!</p>
-            <p className="text-stone-500 text-sm mt-2">
-              Your contact info stays private — coordinate everything here.
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '3rem' }}>
+            <p style={{ color: '#94B7A2' }}>No messages yet. Say hello!</p>
+            <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.7 }}>Your contact info stays private — coordinate everything here.</p>
           </div>
-        ) : (
-          messages.map(msg => {
-            const isMe = msg.sender_id === currentUser?.id
-            return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-sm px-4 py-3 rounded-2xl text-sm ${
-                  isMe
-                    ? 'bg-emerald-600 text-white rounded-br-sm'
-                    : 'bg-stone-800 text-stone-100 rounded-bl-sm'
-                }`}>
-                  <p>{msg.content}</p>
-                  <p className={`text-xs mt-1 ${isMe ? 'text-emerald-200' : 'text-stone-500'}`}>
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
+        ) : messages.map(msg => {
+          const isMe = msg.sender_id === currentUser?.id
+          return (
+            <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+              <div style={{ maxWidth: '400px', padding: '0.75rem 1rem', borderRadius: '1rem', fontSize: '0.875rem', backgroundColor: isMe ? '#237371' : '#F5F5F3', color: isMe ? '#FEFFFF' : '#2A272A', borderBottomRightRadius: isMe ? '2px' : '1rem', borderBottomLeftRadius: isMe ? '1rem' : '2px', border: isMe ? 'none' : '1px solid #E0E0DC' }}>
+                <p>{msg.content}</p>
+                <p style={{ fontSize: '0.7rem', marginTop: '0.25rem', opacity: 0.7 }}>
+                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
-            )
-          })
-        )}
+            </div>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <form onSubmit={handleSend} className="px-6 py-4 border-t border-stone-800 bg-stone-900 shrink-0">
-        <div className="flex gap-3 max-w-4xl mx-auto">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-stone-800 border border-stone-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition"
-          />
-          <button
-            type="submit"
-            disabled={sending || !newMessage.trim()}
-            className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:bg-stone-700 disabled:text-stone-500 text-black font-bold rounded-xl transition"
-          >
-            Send
-          </button>
-        </div>
+      <form onSubmit={handleSend} style={{ padding: '1rem 2.5rem', borderTop: '1px solid #E0E0DC', backgroundColor: '#F5F5F3', flexShrink: 0, display: 'flex', gap: '0.75rem' }}>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+          style={{ flex: 1, backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none' }}
+        />
+        <button
+          type="submit"
+          disabled={sending || !newMessage.trim()}
+          style={{ backgroundColor: sending || !newMessage.trim() ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.75rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: sending || !newMessage.trim() ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+        >
+          Send
+        </button>
       </form>
 
     </main>

@@ -4,18 +4,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 const CATEGORIES = [
-  'Home & Garden',
-  'Tech Help',
-  'Transportation',
-  'Tutoring & Education',
-  'Arts & Crafts',
-  'Cooking & Food',
-  'Health & Wellness',
-  'Childcare & Eldercare',
-  'Administrative',
-  'Other',
+  'Home & Garden', 'Tech Help', 'Transportation', 'Tutoring & Education',
+  'Arts & Crafts', 'Cooking & Food', 'Health & Wellness',
+  'Childcare & Eldercare', 'Administrative', 'Other',
 ]
 
 export default function NewPost() {
@@ -23,12 +17,7 @@ export default function NewPost() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: '',
-    hours_required: 1,
-  })
+  const [formData, setFormData] = useState({ title: '', description: '', category: '', hours_required: 1 })
 
   useEffect(() => {
     const getUser = async () => {
@@ -39,9 +28,7 @@ export default function NewPost() {
     getUser()
   }, [])
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -55,130 +42,77 @@ export default function NewPost() {
       .single()
 
     if (profile.hour_balance - formData.hours_required < -5) {
-      setError(`This would exceed your debt limit. Your balance would go below -5 hours.`)
+      setError('This would exceed your debt limit. Your balance would go below -5 hours.')
       setLoading(false)
       return
     }
 
     const { error: postError } = await supabase
       .from('service_posts')
-      .insert({
-        poster_id: user.id,
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        hours_required: parseInt(formData.hours_required),
-      })
+      .insert({ poster_id: user.id, title: formData.title, description: formData.description, category: formData.category, hours_required: parseInt(formData.hours_required) })
 
-    if (postError) {
-      setError(postError.message)
-      setLoading(false)
-      return
-    }
-
+    if (postError) { setError(postError.message); setLoading(false); return }
     router.push('/posts')
   }
 
-  return (
-    <main className="min-h-screen bg-stone-950 text-stone-100">
+  const inputStyle = { width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }
+  const labelStyle = { fontSize: '0.8rem', color: '#2A272A', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }
 
-      {/* Nav */}
-      <nav className="flex justify-between items-center px-8 py-5 border-b border-stone-800">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight text-emerald-400">
-          ACC Timebank
+  return (
+    <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
+
+      <nav style={{ borderBottom: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2.5rem', backgroundColor: '#FEFFFF' }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+          <Image src="/acc-logo.png" alt="ACC Logo" width={40} height={40} />
+          <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
         </Link>
-        <Link href="/posts" className="text-sm text-stone-400 hover:text-white transition">
-          Browse Posts
-        </Link>
+        <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse Posts</Link>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-6 py-12">
-
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Post a Service Request</h1>
-          <p className="text-stone-400">Describe what you need help with and how many hours you're offering.</p>
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '3rem 1.5rem' }}>
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Post a Service Request</h1>
+          <p style={{ color: '#94B7A2' }}>Describe what you need help with and how many hours you're offering.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
           <div>
-            <label className="text-sm text-stone-400 mb-1 block">Title</label>
-            <input
-              name="title"
-              type="text"
-              required
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="e.g. Help moving furniture this Saturday"
-              className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition"
-            />
+            <label style={labelStyle}>Title</label>
+            <input name="title" type="text" required value={formData.title} onChange={handleChange} placeholder="e.g. Help moving furniture this Saturday" style={inputStyle} />
           </div>
 
           <div>
-            <label className="text-sm text-stone-400 mb-1 block">Category</label>
-            <select
-              name="category"
-              required
-              value={formData.category}
-              onChange={handleChange}
-              className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition"
-            >
+            <label style={labelStyle}>Category</label>
+            <select name="category" required value={formData.category} onChange={handleChange} style={inputStyle}>
               <option value="">Select a category</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
+              {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="text-sm text-stone-400 mb-1 block">Description</label>
-            <textarea
-              name="description"
-              required
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Describe what you need in detail. The more specific, the better."
-              rows={5}
-              className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition resize-none"
-            />
+            <label style={labelStyle}>Description</label>
+            <textarea name="description" required value={formData.description} onChange={handleChange} placeholder="Describe what you need in detail." rows={5} style={{ ...inputStyle, resize: 'none' }} />
           </div>
 
           <div>
-            <label className="text-sm text-stone-400 mb-1 block">Hours Offered</label>
-            <div className="flex items-center gap-4">
-              <input
-                name="hours_required"
-                type="number"
-                min="1"
-                max="20"
-                required
-                value={formData.hours_required}
-                onChange={handleChange}
-                className="w-24 bg-stone-900 border border-stone-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition"
-              />
-              <span className="text-stone-400 text-sm">hours in exchange for this service</span>
+            <label style={labelStyle}>Hours Offered</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <input name="hours_required" type="number" min="1" max="20" required value={formData.hours_required} onChange={handleChange} style={{ ...inputStyle, width: '80px' }} />
+              <span style={{ color: '#94B7A2', fontSize: '0.875rem' }}>hours in exchange for this service</span>
             </div>
-            <p className="text-stone-500 text-xs mt-2">You can go up to -5 hours in debt.</p>
+            <p style={{ color: '#94B7A2', fontSize: '0.75rem', marginTop: '0.5rem' }}>You can go up to -5 hours in debt.</p>
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg px-4 py-3">
-              {error}
-            </p>
+            <p style={{ color: '#c0392b', fontSize: '0.875rem', backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.75rem 1rem' }}>{error}</p>
           )}
 
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:bg-stone-700 disabled:text-stone-500 text-black font-bold rounded-lg transition"
-            >
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button type="submit" disabled={loading} style={{ padding: '0.875rem 2rem', backgroundColor: loading ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Posting...' : 'Post Request'}
             </button>
-            <Link
-              href="/posts"
-              className="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-stone-300 font-medium rounded-lg transition text-center"
-            >
+            <Link href="/posts" style={{ padding: '0.875rem 2rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center' }}>
               Cancel
             </Link>
           </div>

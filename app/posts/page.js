@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function Posts() {
   const router = useRouter()
@@ -23,10 +24,7 @@ export default function Posts() {
   const fetchPosts = async () => {
     const { data } = await supabase
       .from('service_posts')
-      .select(`
-        *,
-        profiles (username, full_name)
-      `)
+      .select(`*, profiles (username, full_name)`)
       .eq('status', 'open')
       .order('created_at', { ascending: false })
 
@@ -38,87 +36,72 @@ export default function Posts() {
   const categories = ['all', ...new Set(posts.map(p => p.category))]
 
   return (
-    <main className="min-h-screen bg-stone-950 text-stone-100">
+    <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
 
-      {/* Nav */}
-      <nav className="flex justify-between items-center px-8 py-5 border-b border-stone-800">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight text-emerald-400">
-          ACC Timebank
+      <nav style={{ borderBottom: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2.5rem', backgroundColor: '#FEFFFF' }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+          <Image src="/acc-logo.png" alt="ACC Logo" width={40} height={40} />
+          <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
         </Link>
-        <div className="flex gap-4 items-center">
-          <Link href="/dashboard" className="text-sm text-stone-400 hover:text-white transition">
-            Dashboard
-          </Link>
-          <Link href="/posts/new" className="px-4 py-2 text-sm bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-lg transition">
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <Link href="/dashboard" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Dashboard</Link>
+          <Link href="/posts/new" style={{ backgroundColor: '#237371', color: '#FEFFFF', fontSize: '0.875rem', fontWeight: 700, padding: '0.6rem 1.25rem', borderRadius: '0.5rem', textDecoration: 'none' }}>
             + Post Request
           </Link>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '3rem 1.5rem' }}>
 
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Community Requests</h1>
-            <p className="text-stone-400">{posts.length} open requests in your community</p>
-          </div>
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Community Requests</h1>
+          <p style={{ color: '#94B7A2' }}>{posts.length} open requests in your community</p>
         </div>
 
         {/* Category Filter */}
-        <div className="flex gap-2 flex-wrap mb-8">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
           {categories.map(cat => (
             <button
               key={cat}
               onClick={() => setFilter(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition capitalize ${
-                filter === cat
-                  ? 'bg-emerald-500 text-black'
-                  : 'bg-stone-800 text-stone-400 hover:text-white'
-              }`}
+              style={{ padding: '0.4rem 1rem', borderRadius: '9999px', fontSize: '0.8rem', fontWeight: 600, border: 'none', cursor: 'pointer', textTransform: 'capitalize', backgroundColor: filter === cat ? '#237371' : '#F5F5F3', color: filter === cat ? '#FEFFFF' : '#2A272A' }}
             >
               {cat}
             </button>
           ))}
         </div>
 
-        {/* Posts List */}
         {loading ? (
-          <p className="text-stone-400">Loading posts...</p>
+          <p style={{ color: '#94B7A2' }}>Loading posts...</p>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-stone-400 text-lg mb-4">No requests yet.</p>
-            <Link href="/posts/new" className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg transition">
+          <div style={{ textAlign: 'center', padding: '5rem 0' }}>
+            <p style={{ color: '#94B7A2', fontSize: '1.125rem', marginBottom: '1rem' }}>No requests yet.</p>
+            <Link href="/posts/new" style={{ backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.875rem 2rem', borderRadius: '0.75rem', textDecoration: 'none' }}>
               Be the first to post
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {filtered.map(post => (
               <Link
                 key={post.id}
                 href={`/posts/${post.id}`}
-                className="bg-stone-900 border border-stone-800 hover:border-emerald-600 rounded-2xl p-6 transition block"
+                style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', textDecoration: 'none', color: '#2A272A', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', display: 'block' }}
               >
-                <div className="flex justify-between items-start mb-3">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                   <div>
-                    <span className="text-xs text-emerald-400 font-medium uppercase tracking-widest">
-                      {post.category}
-                    </span>
-                    <h2 className="text-lg font-bold mt-1">{post.title}</h2>
+                    <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{post.category}</span>
+                    <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem' }}>{post.title}</h2>
                   </div>
-                  <div className="text-right shrink-0 ml-4">
-                    <p className="text-2xl font-bold text-emerald-400">{post.hours_required}</p>
-                    <p className="text-xs text-stone-400">hours</p>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>
+                    <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}</p>
+                    <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
                   </div>
                 </div>
-                <p className="text-stone-400 text-sm line-clamp-2 mb-4">{post.description}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-stone-500">
-                    Posted by {post.profiles?.full_name || post.profiles?.username}
-                  </span>
-                  <span className="text-xs text-stone-500">
-                    {new Date(post.created_at).toLocaleDateString()}
-                  </span>
+                <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.description}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>Posted by {post.profiles?.full_name || post.profiles?.username}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>{new Date(post.created_at).toLocaleDateString()}</span>
                 </div>
               </Link>
             ))}

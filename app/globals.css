@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --font-cormorant: 'Cormorant Garamond', serif;
@@ -17,7 +15,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #2A272A;
+  background: #FEFFFF;
 }
 
 ::-webkit-scrollbar-thumb {
