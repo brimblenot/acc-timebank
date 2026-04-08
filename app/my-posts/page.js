@@ -85,10 +85,15 @@ export default function MyPosts() {
   const handleDelete = async (post) => {
     setDeleting(post.id)
 
-    // Delete related data first
-    await supabase.from('messages').delete().in('application_id',
-      (post.applications || []).map(a => a.id)
-    )
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('post_id', post.id)
+
+    if (apps?.length > 0) {
+      await supabase.from('messages').delete().in('application_id', apps.map(a => a.id))
+    }
+
     await supabase.from('applications').delete().eq('post_id', post.id)
     await supabase.from('service_posts').delete().eq('id', post.id)
 
@@ -202,30 +207,34 @@ export default function MyPosts() {
                     borderRadius: '1rem',
                     overflow: 'hidden',
                     boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
-                    opacity: isCompleted ? 0.75 : 1,
-                    pointerEvents: isCompleted ? 'none' : 'auto',
-                    position: 'relative'
+                    opacity: isCompleted ? 0.8 : 1,
                   }}
                 >
-                  {/* Completed overlay label */}
-                  {isCompleted && (
-                    <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 2 }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2', border: '1px solid #E0E0DC' }}>
-                        Archived
-                      </span>
-                    </div>
-                  )}
-
                   {/* Post Header */}
                   <div style={{ padding: '1.5rem', borderBottom: '1px solid #E0E0DC' }}>
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{post.category}</span>
-                        <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', marginBottom: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>{post.title}</h2>
+                        {/* Category + Archived badge inline */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            {post.category}
+                          </span>
+                          {isCompleted && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2', border: '1px solid #E0E0DC' }}>
+                              Archived
+                            </span>
+                          )}
+                        </div>
+                        <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>
+                          {post.title}
+                        </h2>
                         <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>{post.description}</p>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>{post.hours_required}</p>
+                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>
+                          {post.hours_required}
+                        </p>
                         <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '9999px', marginTop: '0.5rem', display: 'inline-block', backgroundColor: sc.bg, color: sc.color }}>
                           {post.status}
@@ -272,7 +281,9 @@ export default function MyPosts() {
                             <p style={{ color: '#237371', fontWeight: 700, fontSize: '0.875rem' }}>
                               Working with {approvedApp.profiles?.full_name || approvedApp.profiles?.username}
                             </p>
-                            <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>Mark complete when the service is done to transfer hours.</p>
+                            <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                              Mark complete when the service is done to transfer hours.
+                            </p>
                           </div>
                           <div style={{ display: 'flex', gap: '0.75rem' }}>
                             <Link
@@ -295,20 +306,19 @@ export default function MyPosts() {
 
                     {/* Completed Banner */}
                     {post.status === 'completed' && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', pointerEvents: 'auto' }}>
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC' }}>
                         <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.75rem', padding: '1rem' }}>
                           <p style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                             ✓ Completed — {post.hours_required} hours transferred
                             {approvedApp && ` to ${approvedApp.profiles?.full_name || approvedApp.profiles?.username}`}
                           </p>
-                          <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>
+                          <p style={{ color: '#94B7A2', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
                             Completed on {new Date(post.updated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                           </p>
                           {(approvedApp || completedAppId) && (
                             <Link
                               href={`/messages/${approvedApp?.id || completedAppId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{ display: 'inline-block', marginTop: '0.75rem', padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}
+                              style={{ display: 'inline-block', padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}
                             >
                               💬 Messages
                             </Link>
