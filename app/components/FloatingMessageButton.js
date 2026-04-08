@@ -1,11 +1,15 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
 import { useMessages } from '../context/MessagesContext'
+
+const HIDDEN_PATHS = ['/', '/login', '/signup']
 
 export default function FloatingMessageButton() {
   const { openMessages, totalUnread, userId } = useMessages()
+  const pathname = usePathname()
 
-  if (!userId) return null
+  if (!userId || HIDDEN_PATHS.includes(pathname)) return null
 
   return (
     <button
