@@ -15,39 +15,53 @@ export default function MyApplications() {
   const [reviewData, setReviewData] = useState({ rating: 5, comment: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
   const [reviewedPosts, setReviewedPosts] = useState([])
+  const [dismissing, setDismissing] = useState(null)
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
-
-      const { data } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          service_posts (
-            id, title, description, category, hours_required, status, poster_id,
-            profiles (id, full_name, username),
-            applications (id, status, applicant_id,
-              profiles (full_name, username)
-            )
-          )
-        `)
-        .eq('applicant_id', user.id)
-        .order('created_at', { ascending: false })
-
-      const { data: existingReviews } = await supabase
-        .from('reviews')
-        .select('post_id')
-        .eq('reviewer_id', user.id)
-
-      setReviewedPosts((existingReviews || []).map(r => r.post_id))
-      setApplications(data || [])
-      setLoading(false)
+      fetchApplications(user.id)
     }
     init()
   }, [])
+
+  const fetchApplications = async (userId) => {
+    const { data } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        service_posts (
+          id, title, description, category, hours_required, status, poster_id,
+          profiles (id, full_name, username),
+          applications (id, status, applicant_id,
+            profiles (full_name, username)
+          )
+        )
+      `)
+      .eq('applicant_id', userId)
+      .order('created_at', { ascending: false })
+
+    const { data: existingReviews } = await supabase
+      .from('reviews')
+      .select('post_id')
+      .eq('reviewer_id', userId)
+
+    setReviewedPosts((existingReviews || []).map(r => r.post_id))
+    setApplications(data || [])
+    setLoading(false)
+  }
+
+  const handleDismiss = async (applicationId) => {
+    setDismissing(applicationId)
+    await supabase
+      .from('applications')
+      .delete()
+      .eq('id', applicationId)
+    setApplications(prev => prev.filter(a => a.id !== applicationId))
+    setDismissing(null)
+  }
 
   const submitReview = async () => {
     if (!reviewModal) return
@@ -77,17 +91,24 @@ export default function MyApplications() {
     const post = app.service_posts
     if (!post) return 'unknown'
 
-    // Someone else was accepted
     const otherApproved = post.applications?.find(
       a => a.status === 'approved' && a.applicant_id !== currentUserId
     )
 
     if (app.status === 'declined' && otherApproved) return 'someone_else_accepted'
-    if (app.status === 'declined') return 'declined'
+    if (app.status === 'declined') return 'someone_else_accepted'
     if (app.status === 'approved' && post.status === 'completed') return 'completed'
     if (app.status === 'approved') return 'approved'
     if (app.status === 'pending' && (post.status === 'in_progress' || post.status === 'completed')) return 'someone_else_accepted'
     return 'pending'
+  }
+
+  const statusConfig = {
+    approved: { bg: '#EBF5F0', color: '#237371', label: '✓ Approved' },
+    completed: { bg: '#EBF5F0', color: '#237371', label: '✓ Completed' },
+    pending: { bg: '#F5F5F3', color: '#94B7A2', label: '⏳ Pending Review' },
+    someone_else_accepted: { bg: '#FEF9E7', color: '#D4A017', label: '⚠ Someone Else Was Accepted' },
+    unknown: { bg: '#F5F5F3', color: '#94B7A2', label: 'Unknown' },
   }
 
   return (
@@ -122,25 +143,55 @@ export default function MyApplications() {
               const postStatus = getPostStatus(app)
               const isCompleted = postStatus === 'completed'
               const alreadyReviewed = reviewedPosts.includes(app.service_posts?.id)
+              const isDismissable = postStatus === 'someone_else_accepted'
               const acceptedPerson = app.service_posts?.applications?.find(
                 a => a.status === 'approved' && a.applicant_id !== currentUserId
               )
-
-              const statusConfig = {
-                approved: { bg: '#EBF5F0', color: '#237371', label: '✓ Approved' },
-                completed: { bg: '#EBF5F0', color: '#237371', label: '✓ Completed' },
-                pending: { bg: '#F5F5F3', color: '#94B7A2', label: '⏳ Pending Review' },
-                declined: { bg: '#fdf0ef', color: '#c0392b', label: '✕ Declined' },
-                someone_else_accepted: { bg: '#FEF9E7', color: '#D4A017', label: '⚠ Someone Else Was Accepted' },
-                unknown: { bg: '#F5F5F3', color: '#94B7A2', label: 'Unknown' },
-              }
-
               const sc = statusConfig[postStatus] || statusConfig.unknown
 
               return (
-                <div key={app.id} style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', opacity: postStatus === 'someone_else_accepted' || postStatus === 'declined' ? 0.75 : 1 }}>
+                <div
+                  key={app.id}
+                  style={{
+                    backgroundColor: '#FEFFFF',
+                    border: '1px solid #E0E0DC',
+                    borderRadius: '1rem',
+                    padding: '1.5rem',
+                    boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
+                    opacity: isDismissable ? 0.85 : 1,
+                    position: 'relative'
+                  }}
+                >
+                  {/* Dismiss button for rejected */}
+                  {isDismissable && (
+                    <button
+                      onClick={() => handleDismiss(app.id)}
+                      disabled={dismissing === app.id}
+                      title="Remove this application"
+                      style={{
+                        position: 'absolute',
+                        top: '1rem',
+                        right: '1rem',
+                        background: 'none',
+                        border: '1px solid #E0E0DC',
+                        borderRadius: '50%',
+                        width: '28px',
+                        height: '28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: dismissing === app.id ? 'not-allowed' : 'pointer',
+                        color: '#94B7A2',
+                        fontSize: '1rem',
+                        lineHeight: 1,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {dismissing === app.id ? '...' : '×'}
+                    </button>
+                  )}
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', paddingRight: isDismissable ? '2rem' : 0 }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{app.service_posts?.category}</span>
                       <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem' }}>{app.service_posts?.title}</h2>
@@ -158,15 +209,12 @@ export default function MyApplications() {
                   </div>
 
                   {/* Someone else accepted notice */}
-                  {postStatus === 'someone_else_accepted' && acceptedPerson && (
+                  {isDismissable && (
                     <div style={{ backgroundColor: '#FEF9E7', border: '1px solid #D4A017', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#D4A017', fontWeight: 600 }}>
-                      {acceptedPerson.profiles?.full_name || acceptedPerson.profiles?.username} was selected for this request.
-                    </div>
-                  )}
-
-                  {postStatus === 'someone_else_accepted' && !acceptedPerson && (
-                    <div style={{ backgroundColor: '#FEF9E7', border: '1px solid #D4A017', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#D4A017', fontWeight: 600 }}>
-                      Another applicant was selected for this request.
+                      {acceptedPerson
+                        ? `${acceptedPerson.profiles?.full_name || acceptedPerson.profiles?.username} was selected for this request.`
+                        : 'Another applicant was selected for this request.'
+                      }
                     </div>
                   )}
 
@@ -195,6 +243,15 @@ export default function MyApplications() {
                       )}
                       {isCompleted && alreadyReviewed && (
                         <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600 }}>✓ Reviewed</span>
+                      )}
+                      {isDismissable && (
+                        <button
+                          onClick={() => handleDismiss(app.id)}
+                          disabled={dismissing === app.id}
+                          style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#94B7A2', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: dismissing === app.id ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                        >
+                          {dismissing === app.id ? 'Removing...' : 'Dismiss'}
+                        </button>
                       )}
                     </div>
                   </div>
