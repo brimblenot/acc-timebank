@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import ReviewModal from '../../components/ReviewModal'
 
 export default function PostDetail() {
   const router = useRouter()
@@ -24,7 +25,6 @@ export default function PostDetail() {
   const [updating, setUpdating] = useState(null)
   const [completing, setCompleting] = useState(false)
   const [reviewModal, setReviewModal] = useState(null)
-  const [reviewData, setReviewData] = useState({ rating: 5, comment: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
 
   useEffect(() => {
@@ -145,18 +145,17 @@ export default function PostDetail() {
     })
   }
 
-  const submitReview = async () => {
+  const submitReview = async (rating, comment) => {
     if (!reviewModal) return
     setSubmittingReview(true)
     await supabase.from('reviews').insert({
       post_id: id,
       reviewer_id: currentUser.id,
       reviewee_id: reviewModal.revieweeId,
-      rating: reviewData.rating,
-      comment: reviewData.comment || null,
+      rating,
+      comment: comment || null,
     })
     setReviewModal(null)
-    setReviewData({ rating: 5, comment: '' })
     setSubmittingReview(false)
   }
 
@@ -427,48 +426,14 @@ export default function PostDetail() {
         )}
       </div>
 
-      {/* Review Modal */}
       {reviewModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.4)' }} onClick={() => setReviewModal(null)} />
-          <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '440px', boxShadow: '0 8px 40px rgba(42,39,42,0.15)', border: '1px solid #E0E0DC' }}>
-            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>Leave a Review</h2>
-            <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1.5rem' }}>How was your experience with {reviewModal.revieweeName}?</p>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Rating</p>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {[1, 2, 3, 4, 5].map(star => (
-                  <button key={star} onClick={() => setReviewData({ ...reviewData, rating: star })} style={{ fontSize: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewData.rating ? '#D4A017' : '#E0E0DC', padding: 0 }}>★</button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Comment (optional)</p>
-              <textarea
-                value={reviewData.comment}
-                onChange={(e) => setReviewData({ ...reviewData, comment: e.target.value })}
-                placeholder="Share your experience..."
-                rows={3}
-                style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', resize: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button onClick={submitReview} disabled={submittingReview} style={{ flex: 1, padding: '0.875rem', backgroundColor: submittingReview ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: submittingReview ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}>
-                {submittingReview ? 'Submitting...' : 'Submit Review'}
-              </button>
-              <button onClick={() => setReviewModal(null)} style={{ padding: '0.875rem 1.5rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}>Skip</button>
-            </div>
-
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', textAlign: 'center' }}>
-              <Link href={`/messages/${reviewModal.applicationId}`} style={{ color: '#237371', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}>
-                💬 Go to Messages with {reviewModal.revieweeName}
-              </Link>
-            </div>
-          </div>
-        </div>
+        <ReviewModal
+          revieweeName={reviewModal.revieweeName}
+          submitting={submittingReview}
+          onSubmit={submitReview}
+          onClose={() => setReviewModal(null)}
+          messagesLink={reviewModal.applicationId ? `/messages/${reviewModal.applicationId}` : undefined}
+        />
       )}
 
     </main>

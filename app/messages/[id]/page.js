@@ -15,6 +15,8 @@ export default function MessageThread() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [isEnded, setIsEnded] = useState(false)
+  const [leaveConfirm, setLeaveConfirm] = useState(false)
   const bottomRef = useRef(null)
   const messagesRef = useRef([])
 
@@ -41,6 +43,7 @@ export default function MessageThread() {
 
       messagesRef.current = initialMessages || []
       setMessages(initialMessages || [])
+      if ((initialMessages || []).some(m => m.is_system)) setIsEnded(true)
       setLoading(false)
 
       const channel = supabase
@@ -51,6 +54,7 @@ export default function MessageThread() {
           if (!already) {
             messagesRef.current = [...messagesRef.current, newMsg]
             setMessages([...messagesRef.current])
+            if (newMsg.is_system) setIsEnded(true)
           }
         })
         .subscribe()
@@ -63,6 +67,21 @@ export default function MessageThread() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const handleLeaveChat = async () => {
+    const myProfile = currentUser?.id === application.service_posts.poster_id
+      ? application.service_posts.profiles
+      : application.profiles
+    const name = myProfile?.full_name || myProfile?.username || 'Someone'
+    await supabase.from('messages').insert({
+      application_id: id,
+      sender_id: currentUser.id,
+      content: `${name} has left this conversation.`,
+      is_system: true,
+    })
+    setIsEnded(true)
+    setLeaveConfirm(false)
+  }
 
   const handleSend = async (e) => {
     e.preventDefault()
@@ -96,11 +115,28 @@ export default function MessageThread() {
       </nav>
 
       <div style={{ padding: '1rem 2.5rem', borderBottom: '1px solid #E0E0DC', backgroundColor: '#F5F5F3', flexShrink: 0 }}>
-        <p style={{ fontSize: '0.7rem', color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '0.25rem' }}>Service Exchange</p>
-        <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, color: '#2A272A' }}>{application.service_posts.title}</h1>
-        <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>
-          Chatting with {otherPerson?.full_name || otherPerson?.username} · {application.service_posts.hours_required} hours
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <p style={{ fontSize: '0.7rem', color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '0.25rem' }}>Service Exchange</p>
+            <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, color: '#2A272A' }}>{application.service_posts.title}</h1>
+            <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>
+              Chatting with {otherPerson?.full_name || otherPerson?.username} · {application.service_posts.hours_required} hours
+            </p>
+          </div>
+          {!isEnded && (
+            leaveConfirm ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                <span style={{ fontSize: '0.8rem', color: '#c0392b', fontWeight: 600 }}>End conversation?</span>
+                <button onClick={handleLeaveChat} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Yes</button>
+                <button onClick={() => setLeaveConfirm(false)} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#FEFFFF', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}>No</button>
+              </div>
+            ) : (
+              <button onClick={() => setLeaveConfirm(true)} style={{ fontSize: '0.8rem', color: '#94B7A2', background: 'none', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.4rem 0.875rem', cursor: 'pointer', flexShrink: 0, backgroundColor: '#FEFFFF' }}>
+                Leave Chat
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -110,6 +146,15 @@ export default function MessageThread() {
             <p style={{ color: '#94B7A2', fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.7 }}>Your contact info stays private — coordinate everything here.</p>
           </div>
         ) : messages.map(msg => {
+          if (msg.is_system) {
+            return (
+              <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem 0' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94B7A2', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '9999px', padding: '0.3rem 1rem' }}>
+                  {msg.content}
+                </span>
+              </div>
+            )
+          }
           const isMe = msg.sender_id === currentUser?.id
           return (
             <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
@@ -125,6 +170,11 @@ export default function MessageThread() {
         <div ref={bottomRef} />
       </div>
 
+      {isEnded ? (
+        <div style={{ padding: '1rem 2.5rem', borderTop: '1px solid #E0E0DC', backgroundColor: '#F5F5F3', flexShrink: 0, textAlign: 'center' }}>
+          <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>This conversation has ended.</p>
+        </div>
+      ) : (
       <form onSubmit={handleSend} style={{ padding: '1rem 2.5rem', borderTop: '1px solid #E0E0DC', backgroundColor: '#F5F5F3', flexShrink: 0, display: 'flex', gap: '0.75rem' }}>
         <input
           type="text"
@@ -141,6 +191,7 @@ export default function MessageThread() {
           Send
         </button>
       </form>
+      )}
 
     </main>
   )

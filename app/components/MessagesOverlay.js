@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useMessages } from '../context/MessagesContext'
 
 export default function MessagesOverlay() {
@@ -17,8 +17,11 @@ export default function MessagesOverlay() {
     sending,
     unreadMap,
     userId,
+    endedConvos,
+    leaveConversation,
   } = useMessages()
 
+  const [leaveConfirm, setLeaveConfirm] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -111,8 +114,25 @@ export default function MessagesOverlay() {
           ) : (
             <>
               <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #E0E0DC', flexShrink: 0 }}>
-                <p style={{ fontWeight: 700, color: '#2A272A' }}>{activeConvo.otherPerson}</p>
-                <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>{activeConvo.title}</p>
+                {leaveConfirm ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <p style={{ color: '#c0392b', fontSize: '0.8rem', fontWeight: 600, flex: 1 }}>End this conversation?</p>
+                    <button onClick={async () => { await leaveConversation(activeConvo); setLeaveConfirm(false) }} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Yes, Leave</button>
+                    <button onClick={() => setLeaveConfirm(false)} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontWeight: 700, color: '#2A272A' }}>{activeConvo.otherPerson}</p>
+                      <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>{activeConvo.title}</p>
+                    </div>
+                    {!endedConvos[activeConvo.id] && (
+                      <button onClick={() => setLeaveConfirm(true)} style={{ fontSize: '0.75rem', color: '#94B7A2', background: 'none', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.3rem 0.75rem', cursor: 'pointer', flexShrink: 0, marginLeft: '0.75rem' }}>
+                        Leave Chat
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {messages.length === 0 ? (
@@ -120,6 +140,15 @@ export default function MessagesOverlay() {
                     <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No messages yet. Say hello!</p>
                   </div>
                 ) : messages.map(msg => {
+                  if (msg.is_system) {
+                    return (
+                      <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem 0' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#94B7A2', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '9999px', padding: '0.3rem 1rem' }}>
+                          {msg.content}
+                        </span>
+                      </div>
+                    )
+                  }
                   const isMe = msg.sender_id === userId
                   return (
                     <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
@@ -134,22 +163,28 @@ export default function MessagesOverlay() {
                 })}
                 <div ref={bottomRef} />
               </div>
-              <form onSubmit={handleSend} style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E0E0DC', flexShrink: 0, display: 'flex', gap: '0.75rem' }}>
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  style={{ flex: 1, backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none' }}
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !newMessage.trim()}
-                  style={{ backgroundColor: sending || !newMessage.trim() ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.75rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: sending || !newMessage.trim() ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
-                >
-                  Send
-                </button>
-              </form>
+              {endedConvos[activeConvo.id] ? (
+                <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E0E0DC', flexShrink: 0, textAlign: 'center' }}>
+                  <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>This conversation has ended.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSend} style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E0E0DC', flexShrink: 0, display: 'flex', gap: '0.75rem' }}>
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    style={{ flex: 1, backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending || !newMessage.trim()}
+                    style={{ backgroundColor: sending || !newMessage.trim() ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.75rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: sending || !newMessage.trim() ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                  >
+                    Send
+                  </button>
+                </form>
+              )}
             </>
           )}
         </div>

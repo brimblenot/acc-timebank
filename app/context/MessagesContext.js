@@ -7,6 +7,7 @@ const MessagesContext = createContext(null)
 
 export function MessagesProvider({ children }) {
   const [userId, setUserId] = useState(null)
+  const [userDisplayName, setUserDisplayName] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [conversations, setConversations] = useState([])
   const [activeConvo, setActiveConvo] = useState(null)
@@ -14,6 +15,7 @@ export function MessagesProvider({ children }) {
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [unreadMap, setUnreadMap] = useState({})
+  const [endedConvos, setEndedConvos] = useState({})
   const messagesRef = useRef([])
   const channelRef = useRef(null)
 
@@ -22,6 +24,8 @@ export function MessagesProvider({ children }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
+      const { data: prof } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).single()
+      setUserDisplayName(prof?.full_name || prof?.username || '')
       fetchConversations(user.id)
     }
     init()
@@ -138,6 +142,11 @@ export function MessagesProvider({ children }) {
     messagesRef.current = data || []
     setMessages(data || [])
 
+    // Detect if conversation was already ended
+    if ((data || []).some(m => m.is_system)) {
+      setEndedConvos(prev => ({ ...prev, [convo.id]: true }))
+    }
+
     const channel = supabase
       .channel(`global-room-${convo.id}`)
       .on('postgres_changes', {
@@ -150,11 +159,26 @@ export function MessagesProvider({ children }) {
         if (!messagesRef.current.find(m => m.id === newMsg.id)) {
           messagesRef.current = [...messagesRef.current, newMsg]
           setMessages([...messagesRef.current])
+          if (newMsg.is_system) {
+            setEndedConvos(prev => ({ ...prev, [newMsg.application_id]: true }))
+          }
         }
       })
       .subscribe()
 
     channelRef.current = channel
+  }
+
+  const leaveConversation = async (convo) => {
+    if (!userId || !convo) return
+    const name = userDisplayName || 'Someone'
+    await supabase.from('messages').insert({
+      application_id: convo.id,
+      sender_id: userId,
+      content: `${name} has left this conversation.`,
+      is_system: true,
+    })
+    setEndedConvos(prev => ({ ...prev, [convo.id]: true }))
   }
 
   const handleSend = async (e) => {
@@ -185,6 +209,8 @@ export function MessagesProvider({ children }) {
       sending,
       unreadMap,
       totalUnread,
+      endedConvos,
+      leaveConversation,
       refetchConversations: fetchConversations,
     }}>
       {children}

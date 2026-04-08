@@ -14,8 +14,22 @@ export default function Signup() {
     email: '',
     password: '',
   })
+  const [selectedSkills, setSelectedSkills] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  const SKILLS = [
+    'Cooking & Meals', 'Transportation', 'Home Repair', 'Gardening & Yard Work',
+    'Tech Help', 'Childcare', 'Pet Care', 'Tutoring & Education',
+    'Errands & Shopping', 'Translation', 'Healthcare Support',
+    'Music & Arts', 'Sewing & Crafts', 'Emotional Support', 'Other',
+  ]
+
+  const toggleSkill = (skill) => {
+    setSelectedSkills(prev =>
+      prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+    )
+  }
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -26,7 +40,7 @@ export default function Signup() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signUp({
+    const { data: { user }, error } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
       options: {
@@ -40,9 +54,16 @@ export default function Signup() {
     if (error) {
       setError(error.message)
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+
+    if (user && selectedSkills.length > 0) {
+      setTimeout(async () => {
+        await supabase.from('profiles').update({ skills: selectedSkills }).eq('id', user.id)
+      }, 600)
+    }
+
+    router.push('/dashboard')
   }
 
   return (
@@ -118,6 +139,34 @@ export default function Signup() {
               placeholder="Min. 6 characters"
               style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
             />
+          </div>
+
+          {/* Skills */}
+          <div>
+            <label style={{ fontSize: '0.8rem', color: '#2A272A', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
+              Skills I can offer <span style={{ color: '#94B7A2', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {SKILLS.map(skill => (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkill(skill)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: selectedSkills.includes(skill) ? '#237371' : '#F5F5F3',
+                    color: selectedSkills.includes(skill) ? '#FEFFFF' : '#2A272A',
+                  }}
+                >
+                  {skill}
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && (
