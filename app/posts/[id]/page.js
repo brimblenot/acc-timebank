@@ -195,7 +195,14 @@ export default function PostDetail() {
           <Image src="/acc-logo.png" alt="ACC Logo" width={40} height={40} />
           <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
         </Link>
-        <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>← Back to Posts</Link>
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse</Link>
+          <Link href="/my-posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Posts</Link>
+          <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
+          <Link href="/members" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Members</Link>
+          {currentUser?.id && <Link href={`/profile/${currentUser.id}`} style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Profile</Link>}
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} style={{ color: '#94B7A2', fontSize: '0.875rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Log Out</button>
+        </div>
       </nav>
 
       <div style={{ maxWidth: '720px', margin: '0 auto', padding: '3rem 1.5rem' }}>
@@ -203,15 +210,14 @@ export default function PostDetail() {
         {/* Category + Status */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
           <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: '#EBF5F0', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{post.category}</span>
-          <span style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#F5F5F3', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{post.status}</span>
+          <span style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#F5F5F3', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{{ open: 'Open', in_progress: 'In Progress', completed: 'Completed' }[post.status] || post.status}</span>
         </div>
 
         {/* Title + Hours */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
           <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, lineHeight: 1.1, flex: 1 }}>{post.title}</h1>
           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-            <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '3.5rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}</p>
-            <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>hours</p>
+            <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '3.5rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}<span style={{ fontSize: '1.25rem', fontWeight: 600, marginLeft: '0.25rem' }}>hrs</span></p>
           </div>
         </div>
 
@@ -280,8 +286,8 @@ export default function PostDetail() {
               </div>
             )}
 
-            {/* Applications Section */}
-            {post.status !== 'completed' && (
+            {/* Applications Section — only when open */}
+            {post.status === 'open' && (
               <div style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', overflow: 'hidden' }}>
                 <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>

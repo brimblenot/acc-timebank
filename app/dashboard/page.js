@@ -100,8 +100,8 @@ export default function Dashboard() {
         </Link>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
           <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse</Link>
-          <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
           <Link href="/my-posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Posts</Link>
+          <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
           <Link href="/members" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Members</Link>
           {profile?.id && (
             <Link href={`/profile/${profile.id}`} style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Profile</Link>
@@ -126,8 +126,8 @@ export default function Dashboard() {
         <div style={{ backgroundColor: '#237371', borderRadius: '1rem', padding: '2.5rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ color: '#94B7A2', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Hour Balance</p>
-            <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '5rem', fontWeight: 700, color: '#FEFFFF', lineHeight: 1 }}>{profile?.hour_balance ?? 0}</p>
-            <p style={{ color: '#94B7A2', marginTop: '0.5rem', fontSize: '0.875rem' }}>hours available to spend</p>
+            <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '5rem', fontWeight: 700, color: '#FEFFFF', lineHeight: 1 }}>{profile?.hour_balance ?? 0}<span style={{ fontSize: '1.75rem', fontWeight: 400, marginLeft: '0.35rem' }}>hrs</span></p>
+            <p style={{ color: '#94B7A2', marginTop: '0.5rem', fontSize: '0.875rem' }}>available to spend</p>
           </div>
           <div style={{ fontSize: '5rem' }}>⏱️</div>
         </div>

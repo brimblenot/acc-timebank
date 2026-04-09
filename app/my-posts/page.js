@@ -173,9 +173,9 @@ export default function MyPosts() {
   )
 
   const statusColor = (status) => {
-    if (status === 'open') return { bg: '#EBF5F0', color: '#237371' }
-    if (status === 'in_progress') return { bg: '#FEF9E7', color: '#D4A017' }
-    return { bg: '#F5F5F3', color: '#94B7A2' }
+    if (status === 'open') return { bg: '#EBF5F0', color: '#237371', label: 'Open' }
+    if (status === 'in_progress') return { bg: '#FEF9E7', color: '#D4A017', label: 'In Progress' }
+    return { bg: '#F5F5F3', color: '#94B7A2', label: 'Completed' }
   }
 
   const ongoingExchanges = activeExchanges.filter(a => a.service_posts?.status !== 'completed')
@@ -190,8 +190,12 @@ export default function MyPosts() {
           <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
         </Link>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse Posts</Link>
-          <Link href="/dashboard" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Dashboard</Link>
+          <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse</Link>
+          <Link href="/my-posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Posts</Link>
+          <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
+          <Link href="/members" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Members</Link>
+          {currentUserId && <Link href={`/profile/${currentUserId}`} style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Profile</Link>}
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} style={{ color: '#94B7A2', fontSize: '0.875rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Log Out</button>
         </div>
       </nav>
 
@@ -229,8 +233,7 @@ export default function MyPosts() {
                         </p>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}</p>
-                        <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
+                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{post.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
                       </div>
                     </div>
                     <Link href={`/messages/${app.id}`} style={{ display: 'inline-block', padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}>
@@ -271,8 +274,7 @@ export default function MyPosts() {
                         </p>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#94B7A2', lineHeight: 1 }}>{post.hours_required}</p>
-                        <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
+                        <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#94B7A2', lineHeight: 1 }}>{post.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
                       </div>
                     </div>
                     <Link href={`/messages/${app.id}`} style={{ display: 'inline-block', padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#94B7A2', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', border: '1px solid #E0E0DC' }}>
@@ -339,11 +341,6 @@ export default function MyPosts() {
                               {pendingCount} pending
                             </span>
                           )}
-                          {!isCompleted && approvedApp && (
-                            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371', border: '1px solid #94B7A2' }}>
-                              ✓ approved
-                            </span>
-                          )}
                         </div>
                         <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>
                           {post.title}
@@ -352,45 +349,14 @@ export default function MyPosts() {
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
                         <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>
-                          {post.hours_required}
+                          {post.hours_required}<span style={{ fontSize: '1rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span>
                         </p>
-                        <p style={{ fontSize: '0.75rem', color: '#94B7A2' }}>hours</p>
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '9999px', marginTop: '0.5rem', display: 'inline-block', backgroundColor: sc.bg, color: sc.color }}>
-                          {post.status}
+                          {sc.label}
                         </span>
                       </div>
                     </div>
 
-                    {/* Delete button — only on open posts */}
-                    {isDeletable && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E0E0DC', display: 'flex', justifyContent: 'flex-end' }}>
-                        {deleteConfirm === post.id ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>Are you sure?</p>
-                            <button
-                              onClick={() => handleDelete(post)}
-                              disabled={deleting === post.id}
-                              style={{ padding: '0.4rem 1rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}
-                            >
-                              {deleting === post.id ? 'Deleting...' : 'Yes, Delete'}
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              style={{ padding: '0.4rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(post.id)}
-                            style={{ padding: '0.4rem 1rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: 'pointer', fontSize: '0.8rem' }}
-                          >
-                            Delete Post
-                          </button>
-                        )}
-                      </div>
-                    )}
 
                     {/* In Progress Banner */}
                     {post.status === 'in_progress' && approvedApp && (
@@ -447,8 +413,8 @@ export default function MyPosts() {
                     )}
                   </div>
 
-                  {/* Applications — hide on completed posts */}
-                  {!isCompleted && (
+                  {/* Applications — only show on open posts */}
+                  {post.status === 'open' && (
                     <div style={{ padding: '1.5rem' }}>
                       <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
                         Applications ({visibleApps.length})
@@ -516,6 +482,24 @@ export default function MyPosts() {
                             </div>
                           ))}
                         </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Delete — secondary destructive, bottom of card */}
+                  {isDeletable && (
+                    <div style={{ padding: '0 1.5rem 1.25rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                      {deleteConfirm === post.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>Are you sure?</p>
+                          <button onClick={() => handleDelete(post)} disabled={deleting === post.id} style={{ padding: '0.3rem 0.75rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 600, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                            {deleting === post.id ? 'Deleting...' : 'Yes, Delete'}
+                          </button>
+                          <button onClick={() => setDeleteConfirm(null)} style={{ padding: '0.3rem 0.75rem', backgroundColor: '#F5F5F3', color: '#94B7A2', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.75rem' }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteConfirm(post.id)} style={{ padding: '0.3rem 0.75rem', backgroundColor: 'transparent', color: '#94B7A2', fontWeight: 500, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.75rem' }}>
+                          Delete Post
+                        </button>
                       )}
                     </div>
                   )}
