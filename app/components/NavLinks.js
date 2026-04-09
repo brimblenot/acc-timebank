@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useMessages } from '../context/MessagesContext'
 import { supabase } from '../lib/supabase'
+import NotificationBell from './NotificationBell'
 
 function NavBadge({ count }) {
   if (!count) return null
@@ -58,6 +59,7 @@ export default function NavLinks({ userId }) {
       {userId && (
         <Link href={`/profile/${userId}`} style={s(`/profile/${userId}`)}>My Profile</Link>
       )}
+      {userId && <NotificationBell />}
       <button
         onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
         style={{ color: '#94B7A2', fontSize: '0.875rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
