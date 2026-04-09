@@ -10,7 +10,7 @@ const FONT_STEPS = [
 
 function applySettings({ fontStep, highContrast }) {
   const html = document.documentElement
-  FONT_STEPS.forEach(s => html.classList.remove(s.cls))
+  FONT_STEPS.forEach(s => { if (s.cls) html.classList.remove(s.cls) })
   const step = FONT_STEPS.find(s => s.key === fontStep) || FONT_STEPS[0]
   if (step.cls) html.classList.add(step.cls)
   html.classList.toggle('high-contrast', highContrast)
