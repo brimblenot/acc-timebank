@@ -85,6 +85,7 @@ export default function Dashboard() {
     { href: '/my-applications', icon: '🙋', label: 'My Applications', sub: 'Track your offers' },
     { href: '/my-posts', icon: '📬', label: 'My Posts', sub: 'Review applicants' },
     { href: '/members', icon: '👥', label: 'Members', sub: 'Find community members' },
+    { href: '/history', icon: '🕰️', label: 'History', sub: 'View completed exchanges' },
   ]
 
   return (
