@@ -213,6 +213,13 @@ export default function MyApplications() {
                     </div>
                   </div>
 
+                  {/* Approved notice */}
+                  {postStatus === 'approved' && (
+                    <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#237371', fontWeight: 700 }}>
+                      Your application was approved — check messages to coordinate.
+                    </div>
+                  )}
+
                   {/* Someone else accepted notice */}
                   {isDismissable && (
                     <div style={{ backgroundColor: '#FEF9E7', border: '1px solid #D4A017', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#D4A017', fontWeight: 600 }}>

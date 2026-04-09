@@ -276,6 +276,7 @@ export default function MyPosts() {
               const visibleApps = post.applications?.filter(a => a.status !== 'declined') || []
               const isCompleted = post.status === 'completed'
               const isDeletable = post.status === 'open'
+              const pendingCount = post.applications?.filter(a => a.status === 'pending').length || 0
 
               return (
                 <div
@@ -302,6 +303,16 @@ export default function MyPosts() {
                           {isCompleted && (
                             <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#F5F5F3', color: '#94B7A2', border: '1px solid #E0E0DC' }}>
                               Archived
+                            </span>
+                          )}
+                          {!isCompleted && pendingCount > 0 && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#FEF9E7', color: '#D4A017', border: '1px solid #D4A017' }}>
+                              {pendingCount} pending
+                            </span>
+                          )}
+                          {!isCompleted && approvedApp && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#EBF5F0', color: '#237371', border: '1px solid #94B7A2' }}>
+                              ✓ approved
                             </span>
                           )}
                         </div>

@@ -122,7 +122,15 @@ export default function Posts() {
                 </div>
                 <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1rem', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{post.description}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>Posted by {post.profiles?.full_name || post.profiles?.username}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>
+                    Posted by{' '}
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/profile/${post.poster_id}`) }}
+                      style={{ background: 'none', border: 'none', padding: 0, color: '#237371', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      {post.profiles?.full_name || post.profiles?.username}
+                    </button>
+                  </span>
                   <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>{new Date(post.created_at).toLocaleDateString()}</span>
                 </div>
               </Link>

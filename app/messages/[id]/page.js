@@ -120,7 +120,11 @@ export default function MessageThread() {
             <p style={{ fontSize: '0.7rem', color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '0.25rem' }}>Service Exchange</p>
             <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, color: '#2A272A' }}>{application.service_posts.title}</h1>
             <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>
-              Chatting with {otherPerson?.full_name || otherPerson?.username} · {application.service_posts.hours_required} hours
+              Chatting with{' '}
+              <Link href={`/profile/${otherPerson?.id}`} style={{ color: '#237371', fontWeight: 600, textDecoration: 'none' }}>
+                {otherPerson?.full_name || otherPerson?.username}
+              </Link>
+              {' '}· {application.service_posts.hours_required} hours
             </p>
           </div>
           {!isEnded && (

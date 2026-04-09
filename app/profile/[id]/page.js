@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [editData, setEditData] = useState({ full_name: '', bio: '', skills: [] })
   const [saving, setSaving] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [donateModal, setDonateModal] = useState(false)
   const [donateAmount, setDonateAmount] = useState('')
   const [donating, setDonating] = useState(false)
@@ -42,7 +43,7 @@ export default function ProfilePage() {
       setIsOwnProfile(user.id === id)
 
       const [profileRes, viewerRes] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, username, bio, skills').eq('id', id).single(),
+        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url').eq('id', id).single(),
         supabase.from('profiles').select('hour_balance').eq('id', user.id).single(),
       ])
 
@@ -83,6 +84,23 @@ export default function ProfilePage() {
       setEditing(false)
     }
     setSaving(false)
+  }
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${viewerId}/avatar.${ext}`
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!uploadError) {
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      // Bust cache by appending timestamp
+      const urlWithBust = `${publicUrl}?t=${Date.now()}`
+      await supabase.from('profiles').update({ avatar_url: urlWithBust }).eq('id', viewerId)
+      setProfile(prev => ({ ...prev, avatar_url: urlWithBust }))
+    }
+    setAvatarUploading(false)
   }
 
   const toggleEditSkill = (skill) => {
@@ -140,8 +158,22 @@ export default function ProfilePage() {
 
         {/* Profile Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', marginBottom: '2rem' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: '#237371', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FEFFFF', fontWeight: 700, fontSize: '1.5rem', flexShrink: 0 }}>
-            {initials}
+          {/* Avatar */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.avatar_url} alt={displayName} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+            ) : (
+              <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: '#237371', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FEFFFF', fontWeight: 700, fontSize: '1.5rem' }}>
+                {initials}
+              </div>
+            )}
+            {editing && (
+              <label style={{ position: 'absolute', inset: 0, borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: avatarUploading ? 'not-allowed' : 'pointer', fontSize: '1.4rem' }}>
+                {avatarUploading ? '⏳' : '📷'}
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} disabled={avatarUploading} style={{ display: 'none' }} />
+              </label>
+            )}
           </div>
           <div style={{ flex: 1 }}>
             {editing ? (
@@ -265,9 +297,9 @@ export default function ProfilePage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: r.comment ? '0.5rem' : 0 }}>
                     <span style={{ fontSize: '1.75rem' }}>{EMOTE_MAP[r.rating] || '😊'}</span>
                     <div>
-                      <p style={{ fontWeight: 600, fontSize: '0.875rem', color: '#2A272A' }}>
+                      <Link href={`/profile/${r.reviewer_id}`} style={{ fontWeight: 600, fontSize: '0.875rem', color: '#2A272A', textDecoration: 'none' }}>
                         {r.profiles?.full_name || r.profiles?.username || 'Community Member'}
-                      </p>
+                      </Link>
                       <p style={{ color: '#94B7A2', fontSize: '0.75rem' }}>
                         {new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
