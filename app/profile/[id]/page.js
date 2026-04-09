@@ -43,13 +43,13 @@ export default function ProfilePage() {
       setIsOwnProfile(user.id === id)
 
       const [profileRes, viewerRes] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url').eq('id', id).single(),
+        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url, vacation_mode').eq('id', id).single(),
         supabase.from('profiles').select('hour_balance').eq('id', user.id).single(),
       ])
 
       if (!profileRes.data) { setLoading(false); return }
       setProfile(profileRes.data)
-      setEditData({ full_name: profileRes.data.full_name || '', bio: profileRes.data.bio || '', skills: profileRes.data.skills || [] })
+      setEditData({ full_name: profileRes.data.full_name || '', bio: profileRes.data.bio || '', skills: profileRes.data.skills || [], vacation_mode: profileRes.data.vacation_mode || false })
       setViewerBalance(viewerRes.data?.hour_balance ?? 0)
 
       // Stats
@@ -78,9 +78,10 @@ export default function ProfilePage() {
       full_name: editData.full_name,
       bio: editData.bio,
       skills: editData.skills,
+      vacation_mode: editData.vacation_mode,
     }).eq('id', id)
     if (!error) {
-      setProfile(prev => ({ ...prev, full_name: editData.full_name, bio: editData.bio, skills: editData.skills }))
+      setProfile(prev => ({ ...prev, full_name: editData.full_name, bio: editData.bio, skills: editData.skills, vacation_mode: editData.vacation_mode }))
       setEditing(false)
     }
     setSaving(false)
@@ -211,6 +212,16 @@ export default function ProfilePage() {
                     ))}
                   </div>
                 </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Availability</label>
+                  <button
+                    type="button"
+                    onClick={() => setEditData(prev => ({ ...prev, vacation_mode: !prev.vacation_mode }))}
+                    style={{ padding: '0.4rem 1rem', borderRadius: '9999px', border: '1px solid', borderColor: editData.vacation_mode ? '#D4A017' : '#E0E0DC', backgroundColor: editData.vacation_mode ? '#FEF9E7' : '#F5F5F3', color: editData.vacation_mode ? '#D4A017' : '#94B7A2', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                  >
+                    {editData.vacation_mode ? '🌴 On Vacation' : '✓ Available'}
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
                   <button
                     onClick={handleSave}
@@ -229,7 +240,12 @@ export default function ProfilePage() {
               </div>
             ) : (
               <>
-                <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, marginBottom: '0.15rem' }}>{displayName}</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, marginBottom: '0.15rem' }}>{displayName}</h1>
+                  {profile.vacation_mode && (
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '9999px', backgroundColor: '#FEF9E7', color: '#D4A017', border: '1px solid #D4A017' }}>🌴 On Vacation</span>
+                  )}
+                </div>
                 {profile.username && profile.full_name && (
                   <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '0.5rem' }}>@{profile.username}</p>
                 )}

@@ -84,6 +84,7 @@ export default function Dashboard() {
     { href: '/posts/new', icon: '✏️', label: 'Post Request', sub: 'Ask for help' },
     { href: '/my-applications', icon: '🙋', label: 'My Applications', sub: 'Track your offers' },
     { href: '/my-posts', icon: '📬', label: 'My Posts', sub: 'Review applicants' },
+    { href: '/members', icon: '👥', label: 'Members', sub: 'Find community members' },
   ]
 
   return (
@@ -101,6 +102,7 @@ export default function Dashboard() {
           <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse</Link>
           <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
           <Link href="/my-posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Posts</Link>
+          <Link href="/members" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Members</Link>
           {profile?.id && (
             <Link href={`/profile/${profile.id}`} style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Profile</Link>
           )}
@@ -131,7 +133,7 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           {quickActions.map(action => (
             <Link key={action.href} href={action.href} style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem', textDecoration: 'none', color: '#2A272A', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', display: 'block' }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>{action.icon}</div>

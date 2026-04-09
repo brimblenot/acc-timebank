@@ -3,6 +3,7 @@ import './globals.css'
 import { MessagesProvider } from './context/MessagesContext'
 import MessagesOverlay from './components/MessagesOverlay'
 import FloatingMessageButton from './components/FloatingMessageButton'
+import AccessibilityWidget from './components/AccessibilityWidget'
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
@@ -33,6 +34,7 @@ export default function RootLayout({
           {children}
           <MessagesOverlay />
           <FloatingMessageButton />
+          <AccessibilityWidget />
         </MessagesProvider>
       </body>
     </html>

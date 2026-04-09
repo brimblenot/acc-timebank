@@ -38,7 +38,7 @@ export default function Posts() {
   const fetchPosts = async () => {
     const { data } = await supabase
       .from('service_posts')
-      .select(`*, profiles (username, full_name)`)
+      .select(`*, profiles (username, full_name, vacation_mode)`)
       .eq('status', 'open')
       .order('created_at', { ascending: false })
 
@@ -112,7 +112,12 @@ export default function Posts() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                   <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{post.category}</span>
+                    {post.profiles?.vacation_mode && (
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.5rem', borderRadius: '9999px', backgroundColor: '#FEF9E7', color: '#D4A017', border: '1px solid #D4A017' }}>🌴 On Vacation</span>
+                    )}
+                  </div>
                     <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem' }}>{post.title}</h2>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>

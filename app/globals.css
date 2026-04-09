@@ -22,3 +22,10 @@
   background: #237371;
   border-radius: 3px;
 }
+
+/* Accessibility — font scaling via html font-size (affects all rem values) */
+html.text-large { font-size: 112% !important; }
+html.text-xl    { font-size: 125% !important; }
+
+/* Accessibility — high contrast via CSS filter */
+html.high-contrast { filter: contrast(1.55); }
