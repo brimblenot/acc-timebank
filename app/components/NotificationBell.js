@@ -75,6 +75,35 @@ function TypeIcon({ type }) {
       </div>
     )
   }
+  if (type === 'hour_request') {
+    return (
+      <div style={{ ...base, backgroundColor: '#e8f4f3' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#237371" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </div>
+    )
+  }
+  if (type === 'hours_received') {
+    return (
+      <div style={{ ...base, backgroundColor: '#fef9e7' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D4A017" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+    )
+  }
+  if (type === 'hours_declined') {
+    return (
+      <div style={{ ...base, backgroundColor: '#fdf2f2' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </div>
+    )
+  }
   return (
     <div style={{ ...base, backgroundColor: '#f5f5f3' }}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94B7A2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -121,6 +150,10 @@ export default function NotificationBell() {
     }
     if (notification.type === 'service_completed') {
       router.push('/history')
+      return
+    }
+    if (notification.type === 'hour_request' || notification.type === 'hours_received' || notification.type === 'hours_declined') {
+      router.push('/hour-requests')
       return
     }
   }

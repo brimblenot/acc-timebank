@@ -35,6 +35,12 @@ export default function ProfilePage() {
   const [donating, setDonating] = useState(false)
   const [donateSuccess, setDonateSuccess] = useState(false)
   const [donateError, setDonateError] = useState(null)
+  const [requestModal, setRequestModal] = useState(false)
+  const [requestAmount, setRequestAmount] = useState('')
+  const [requestMessage, setRequestMessage] = useState('')
+  const [requesting, setRequesting] = useState(false)
+  const [requestSuccess, setRequestSuccess] = useState(false)
+  const [requestError, setRequestError] = useState(null)
 
   useEffect(() => {
     const init = async () => {
@@ -110,6 +116,29 @@ export default function ProfilePage() {
       ...prev,
       skills: prev.skills.includes(skill) ? prev.skills.filter(s => s !== skill) : [...prev.skills, skill],
     }))
+  }
+
+  const handleRequest = async () => {
+    const amount = parseInt(requestAmount)
+    if (!amount || amount < 1 || amount > 20) {
+      setRequestError('Please enter an amount between 1 and 20.')
+      return
+    }
+    setRequesting(true)
+    setRequestError(null)
+    const { error } = await supabase.from('hour_requests').insert({
+      from_user_id: viewerId,
+      to_user_id: id,
+      amount,
+      message: requestMessage.trim() || null,
+    })
+    if (error) {
+      setRequestError(error.message)
+      setRequesting(false)
+    } else {
+      setRequestSuccess(true)
+      setRequesting(false)
+    }
   }
 
   const handleDonate = async () => {
@@ -294,14 +323,20 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Donate */}
+        {/* Actions for other profiles */}
         {!isOwnProfile && (
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button
               onClick={() => { setDonateModal(true); setDonateSuccess(false); setDonateError(null) }}
-              style={{ padding: '0.75rem 1.75rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
+              style={{ padding: '0.75rem 1.5rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}
             >
-              🎁 Donate Hours to {profile.full_name || profile.username}
+              🎁 Donate Hours
+            </button>
+            <button
+              onClick={() => { setRequestModal(true); setRequestSuccess(false); setRequestError(null); setRequestAmount(''); setRequestMessage('') }}
+              style={{ padding: '0.75rem 1.5rem', backgroundColor: '#FEFFFF', color: '#237371', fontWeight: 700, borderRadius: '0.75rem', border: '2px solid #237371', cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              ⏱ Request Hours
             </button>
           </div>
         )}
@@ -383,6 +418,80 @@ export default function ProfilePage() {
                     {donating ? 'Donating...' : 'Donate'}
                   </button>
                   <button onClick={() => setDonateModal(false)} style={{ padding: '0.875rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Request Hours Modal */}
+      {requestModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.4)' }} onClick={() => setRequestModal(false)} />
+          <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '400px', boxShadow: '0 8px 40px rgba(42,39,42,0.15)', border: '1px solid #E0E0DC' }}>
+            {requestSuccess ? (
+              <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⏱️</div>
+                <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>Request Sent!</h2>
+                <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+                  {profile.full_name || profile.username} will be notified and can approve or decline your request.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button onClick={() => setRequestModal(false)} style={{ padding: '0.75rem 2rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}>Done</button>
+                  <Link href="/hour-requests" style={{ padding: '0.75rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', fontSize: '0.875rem' }}>View Requests</Link>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>Request Hours</h2>
+                <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+                  Ask <strong style={{ color: '#2A272A' }}>{profile.full_name || profile.username}</strong> to send you hours.
+                </p>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                    Hours to request <span style={{ color: '#94B7A2', fontWeight: 400 }}>(1–20)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={requestAmount}
+                    onChange={e => { setRequestAmount(e.target.value); setRequestError(null) }}
+                    placeholder="e.g. 3"
+                    style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                    Message <span style={{ color: '#94B7A2', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <textarea
+                    value={requestMessage}
+                    onChange={e => setRequestMessage(e.target.value)}
+                    placeholder="Explain what you need the hours for..."
+                    rows={3}
+                    style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  />
+                </div>
+
+                {requestError && (
+                  <p style={{ color: '#c0392b', fontSize: '0.8rem', backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.6rem 0.875rem', marginBottom: '1rem' }}>
+                    {requestError}
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    onClick={handleRequest}
+                    disabled={requesting || !requestAmount}
+                    style={{ flex: 1, padding: '0.875rem', backgroundColor: requesting || !requestAmount ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: requesting || !requestAmount ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                  >
+                    {requesting ? 'Sending...' : 'Send Request'}
+                  </button>
+                  <button onClick={() => setRequestModal(false)} style={{ padding: '0.875rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
                 </div>
               </>
             )}
