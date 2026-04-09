@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useMessages } from '../context/MessagesContext'
+import NavLinks from '../components/NavLinks'
 
 export default function Dashboard() {
   const router = useRouter()
@@ -100,17 +101,7 @@ export default function Dashboard() {
           </span>
         </Link>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <Link href="/posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Browse</Link>
-          <Link href="/my-posts" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Posts</Link>
-          <Link href="/my-applications" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Applications</Link>
-          <Link href="/history" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>History</Link>
-          <Link href="/members" style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>Members</Link>
-          {profile?.id && (
-            <Link href={`/profile/${profile.id}`} style={{ color: '#94B7A2', fontSize: '0.875rem', textDecoration: 'none', fontWeight: 600 }}>My Profile</Link>
-          )}
-          <button onClick={handleLogout} style={{ color: '#94B7A2', fontSize: '0.875rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-            Log Out
-          </button>
+          <NavLinks userId={profile?.id} />
         </div>
       </nav>
 

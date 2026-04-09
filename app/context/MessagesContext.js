@@ -16,8 +16,11 @@ export function MessagesProvider({ children }) {
   const [sending, setSending] = useState(false)
   const [unreadMap, setUnreadMap] = useState({})
   const [endedConvos, setEndedConvos] = useState({})
+  const [pendingApplicantCount, setPendingApplicantCount] = useState(0)
+  const [newApprovalCount, setNewApprovalCount] = useState(0)
   const messagesRef = useRef([])
   const channelRef = useRef(null)
+  const badgeChannelRef = useRef(null)
 
   useEffect(() => {
     const init = async () => {
@@ -27,6 +30,8 @@ export function MessagesProvider({ children }) {
       const { data: prof } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).single()
       setUserDisplayName(prof?.full_name || prof?.username || '')
       fetchConversations(user.id)
+      fetchBadgeCounts(user.id)
+      subscribeBadges(user.id)
     }
     init()
 
@@ -38,13 +43,73 @@ export function MessagesProvider({ children }) {
         setActiveConvo(null)
         setMessages([])
         setUnreadMap({})
+        setPendingApplicantCount(0)
+        setNewApprovalCount(0)
+        if (badgeChannelRef.current) supabase.removeChannel(badgeChannelRef.current)
       } else if (event === 'SIGNED_IN' && session?.user) {
         setUserId(session.user.id)
         fetchConversations(session.user.id)
+        fetchBadgeCounts(session.user.id)
+        subscribeBadges(session.user.id)
       }
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  const subscribeBadges = (uid) => {
+    if (badgeChannelRef.current) supabase.removeChannel(badgeChannelRef.current)
+    const ch = supabase
+      .channel('badge-counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => fetchBadgeCounts(uid))
+      .subscribe()
+    badgeChannelRef.current = ch
+  }
+
+  const fetchBadgeCounts = async (uid) => {
+    // Pending applicants on posts I created
+    const { data: myPosts } = await supabase
+      .from('service_posts')
+      .select('id')
+      .eq('poster_id', uid)
+
+    const myPostIds = (myPosts || []).map(p => p.id)
+
+    if (myPostIds.length > 0) {
+      const { count } = await supabase
+        .from('applications')
+        .select('id', { count: 'exact', head: true })
+        .in('post_id', myPostIds)
+        .eq('status', 'pending')
+      setPendingApplicantCount(count || 0)
+    } else {
+      setPendingApplicantCount(0)
+    }
+
+    // My approved applications I haven't opened yet (no conversation_reads entry)
+    const { data: approvedApps } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('applicant_id', uid)
+      .eq('status', 'approved')
+
+    const approvedIds = (approvedApps || []).map(a => a.id)
+
+    if (approvedIds.length > 0) {
+      try {
+        const { data: reads } = await supabase
+          .from('conversation_reads')
+          .select('application_id')
+          .eq('user_id', uid)
+          .in('application_id', approvedIds)
+        const seenIds = new Set((reads || []).map(r => r.application_id))
+        setNewApprovalCount(approvedIds.filter(id => !seenIds.has(id)).length)
+      } catch {
+        setNewApprovalCount(approvedIds.length)
+      }
+    } else {
+      setNewApprovalCount(0)
+    }
+  }
 
   const fetchConversations = async (uid) => {
     const { data: asApplicant } = await supabase
@@ -130,6 +195,8 @@ export function MessagesProvider({ children }) {
         await supabase
           .from('conversation_reads')
           .upsert({ user_id: userId, application_id: convo.id, last_read_at: new Date().toISOString() })
+        // Refresh approval badge — opening the convo marks it as seen
+        fetchBadgeCounts(userId)
       } catch { }
     }
 
@@ -142,7 +209,6 @@ export function MessagesProvider({ children }) {
     messagesRef.current = data || []
     setMessages(data || [])
 
-    // Detect if conversation was already ended
     if ((data || []).some(m => m.is_system)) {
       setEndedConvos(prev => ({ ...prev, [convo.id]: true }))
     }
@@ -212,6 +278,8 @@ export function MessagesProvider({ children }) {
       endedConvos,
       leaveConversation,
       refetchConversations: fetchConversations,
+      pendingApplicantCount,
+      newApprovalCount,
     }}>
       {children}
     </MessagesContext.Provider>
