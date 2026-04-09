@@ -163,12 +163,12 @@ export default function MyApplications() {
                 <div
                   key={app.id}
                   style={{
-                    backgroundColor: '#FEFFFF',
+                    backgroundColor: isCompleted ? '#FAFAFA' : '#FEFFFF',
                     border: '1px solid #E0E0DC',
                     borderRadius: '1rem',
                     padding: '1.5rem',
                     boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
-                    opacity: isDismissable ? 0.85 : 1,
+                    opacity: isCompleted ? 0.8 : isDismissable ? 0.85 : 1,
                     position: 'relative'
                   }}
                 >
@@ -204,16 +204,16 @@ export default function MyApplications() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', paddingRight: isDismissable ? '2rem' : 0 }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{app.service_posts?.category}</span>
-                      <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem' }}>{app.service_posts?.title}</h2>
+                      <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>{app.service_posts?.title}</h2>
                       <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginTop: '0.15rem' }}>
                         Posted by{' '}
-                        <Link href={`/profile/${app.service_posts?.poster_id}`} style={{ color: '#237371', textDecoration: 'none', fontWeight: 600 }}>
+                        <Link href={`/profile/${app.service_posts?.poster_id}`} style={{ color: isCompleted ? '#94B7A2' : '#237371', textDecoration: 'none', fontWeight: 600 }}>
                           {app.service_posts?.profiles?.full_name || app.service_posts?.profiles?.username}
                         </Link>
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>
-                      <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>{app.service_posts?.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
+                      <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>{app.service_posts?.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
                     </div>
                   </div>
 
@@ -249,9 +249,14 @@ export default function MyApplications() {
                           {cancelling === app.id ? 'Cancelling...' : 'Cancel Application'}
                         </button>
                       )}
-                      {(postStatus === 'approved' || postStatus === 'completed') && (
+                      {postStatus === 'approved' && (
                         <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}>
                           💬 Messages
+                        </Link>
+                      )}
+                      {postStatus === 'completed' && (
+                        <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#94B7A2', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', border: '1px solid #E0E0DC' }}>
+                          💬 View Messages
                         </Link>
                       )}
                       {isCompleted && !alreadyReviewed && (
