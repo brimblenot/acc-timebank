@@ -146,15 +146,14 @@ export default function PostDetail() {
     })
   }
 
-  const submitReview = async (rating, comment) => {
+  const submitReview = async (selectedQualities) => {
     if (!reviewModal) return
     setSubmittingReview(true)
     await supabase.from('reviews').insert({
       post_id: id,
       reviewer_id: currentUser.id,
       reviewee_id: reviewModal.revieweeId,
-      rating,
-      comment: comment || null,
+      selected_qualities: selectedQualities,
     })
     setReviewModal(null)
     setSubmittingReview(false)

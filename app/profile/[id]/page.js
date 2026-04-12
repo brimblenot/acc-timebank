@@ -7,8 +7,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import NavLinks from '../../components/NavLinks'
 
-const EMOTE_MAP = { 1: '😶', 2: '🙂', 3: '😊', 4: '😄', 5: '🤩' }
-
 const SKILLS = [
   'Cooking & Meals', 'Transportation', 'Home Repair', 'Gardening & Yard Work',
   'Tech Help', 'Childcare', 'Pet Care', 'Tutoring & Education',
@@ -27,7 +25,7 @@ export default function ProfilePage() {
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [editData, setEditData] = useState({ full_name: '', bio: '', skills: [] })
+  const [editData, setEditData] = useState({ full_name: '', bio: '', skills: [], vacation_mode: false, show_compliments: true })
   const [saving, setSaving] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [donateModal, setDonateModal] = useState(false)
@@ -50,16 +48,21 @@ export default function ProfilePage() {
       setIsOwnProfile(user.id === id)
 
       const [profileRes, viewerRes] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url, vacation_mode').eq('id', id).single(),
+        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url, vacation_mode, show_compliments').eq('id', id).single(),
         supabase.from('profiles').select('hour_balance').eq('id', user.id).single(),
       ])
 
       if (!profileRes.data) { setLoading(false); return }
       setProfile(profileRes.data)
-      setEditData({ full_name: profileRes.data.full_name || '', bio: profileRes.data.bio || '', skills: profileRes.data.skills || [], vacation_mode: profileRes.data.vacation_mode || false })
+      setEditData({
+        full_name: profileRes.data.full_name || '',
+        bio: profileRes.data.bio || '',
+        skills: profileRes.data.skills || [],
+        vacation_mode: profileRes.data.vacation_mode || false,
+        show_compliments: profileRes.data.show_compliments !== false,
+      })
       setViewerBalance(viewerRes.data?.hour_balance ?? 0)
 
-      // Stats
       const { data: completedPosts } = await supabase
         .from('service_posts').select('id').eq('status', 'completed')
       const completedIds = (completedPosts || []).map(p => p.id)
@@ -69,7 +72,7 @@ export default function ProfilePage() {
           ? supabase.from('applications').select('id', { count: 'exact', head: true }).eq('applicant_id', id).eq('status', 'approved').in('post_id', completedIds)
           : Promise.resolve({ count: 0 }),
         supabase.from('service_posts').select('id', { count: 'exact', head: true }).eq('poster_id', id).eq('status', 'completed'),
-        supabase.from('reviews').select('rating, comment, created_at, reviewer_id, profiles!reviewer_id(full_name, username)').eq('reviewee_id', id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('reviews').select('selected_qualities, created_at, reviewer_id, profiles!reviewer_id(full_name, username)').eq('reviewee_id', id).order('created_at', { ascending: false }).limit(10),
       ])
 
       setStats({ given: givenRes.count || 0, received: receivedRes.count || 0 })
@@ -86,9 +89,10 @@ export default function ProfilePage() {
       bio: editData.bio,
       skills: editData.skills,
       vacation_mode: editData.vacation_mode,
+      show_compliments: editData.show_compliments,
     }).eq('id', id)
     if (!error) {
-      setProfile(prev => ({ ...prev, full_name: editData.full_name, bio: editData.bio, skills: editData.skills, vacation_mode: editData.vacation_mode }))
+      setProfile(prev => ({ ...prev, full_name: editData.full_name, bio: editData.bio, skills: editData.skills, vacation_mode: editData.vacation_mode, show_compliments: editData.show_compliments }))
       setEditing(false)
     }
     setSaving(false)
@@ -103,7 +107,6 @@ export default function ProfilePage() {
     const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
     if (!uploadError) {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-      // Bust cache by appending timestamp
       const urlWithBust = `${publicUrl}?t=${Date.now()}`
       await supabase.from('profiles').update({ avatar_url: urlWithBust }).eq('id', viewerId)
       setProfile(prev => ({ ...prev, avatar_url: urlWithBust }))
@@ -173,6 +176,7 @@ export default function ProfilePage() {
 
   const displayName = profile.full_name || profile.username
   const initials = displayName?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
+  const showCompliments = profile.show_compliments !== false
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
@@ -254,6 +258,16 @@ export default function ProfilePage() {
                     {editData.vacation_mode ? '🌴 On Vacation' : '✓ Available'}
                   </button>
                 </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Compliments</label>
+                  <button
+                    type="button"
+                    onClick={() => setEditData(prev => ({ ...prev, show_compliments: !prev.show_compliments }))}
+                    style={{ padding: '0.4rem 1rem', borderRadius: '9999px', border: '1px solid', borderColor: editData.show_compliments ? '#237371' : '#E0E0DC', backgroundColor: editData.show_compliments ? '#EBF5F0' : '#F5F5F3', color: editData.show_compliments ? '#237371' : '#94B7A2', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                  >
+                    {editData.show_compliments ? '✓ Show on profile' : '✗ Hidden from profile'}
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
                   <button
                     onClick={handleSave}
@@ -263,7 +277,7 @@ export default function ProfilePage() {
                     {saving ? 'Saving...' : 'Save'}
                   </button>
                   <button
-                    onClick={() => { setEditing(false); setEditData({ full_name: profile.full_name || '', bio: profile.bio || '', skills: profile.skills || [] }) }}
+                    onClick={() => { setEditing(false); setEditData({ full_name: profile.full_name || '', bio: profile.bio || '', skills: profile.skills || [], vacation_mode: profile.vacation_mode || false, show_compliments: profile.show_compliments !== false }) }}
                     style={{ padding: '0.6rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
                   >
                     Cancel
@@ -314,7 +328,7 @@ export default function ProfilePage() {
           {[
             { label: 'Services Given', value: stats.given },
             { label: 'Services Received', value: stats.received },
-            { label: 'Reviews', value: reviews.length },
+            { label: 'Compliments', value: reviews.length },
           ].map(s => (
             <div key={s.label} style={{ backgroundColor: '#F5F5F3', borderRadius: '1rem', padding: '1.25rem', textAlign: 'center', border: '1px solid #E0E0DC' }}>
               <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: '#237371' }}>{s.value}</p>
@@ -341,15 +355,14 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Reviews */}
-        {reviews.length > 0 && (
+        {/* Compliments / Reviews */}
+        {showCompliments && reviews.length > 0 && (
           <div>
-            <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>Reviews</p>
+            <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>Compliments</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {reviews.map((r, i) => (
                 <div key={i} style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem', boxShadow: '0 2px 8px rgba(42,39,42,0.04)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: r.comment ? '0.5rem' : 0 }}>
-                    <span style={{ fontSize: '1.75rem' }}>{EMOTE_MAP[r.rating] || '😊'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: (r.selected_qualities || []).length > 0 ? '0.75rem' : 0 }}>
                     <div>
                       <Link href={`/profile/${r.reviewer_id}`} style={{ fontWeight: 600, fontSize: '0.875rem', color: '#2A272A', textDecoration: 'none' }}>
                         {r.profiles?.full_name || r.profiles?.username || 'Community Member'}
@@ -359,7 +372,21 @@ export default function ProfilePage() {
                       </p>
                     </div>
                   </div>
-                  {r.comment && <p style={{ color: '#2A272A', fontSize: '0.875rem', lineHeight: 1.6 }}>{r.comment}</p>}
+                  {(r.selected_qualities || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {r.selected_qualities.map(tag => (
+                        <span
+                          key={tag}
+                          style={{ padding: '0.3rem 0.75rem', backgroundColor: '#EBF5F0', color: '#237371', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600, border: '1px solid #c5e3da' }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(r.selected_qualities || []).length === 0 && (
+                    <p style={{ color: '#94B7A2', fontSize: '0.8rem', fontStyle: 'italic' }}>Left a compliment</p>
+                  )}
                 </div>
               ))}
             </div>

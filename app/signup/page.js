@@ -15,6 +15,7 @@ export default function Signup() {
     password: '',
   })
   const [selectedSkills, setSelectedSkills] = useState([])
+  const [showCompliments, setShowCompliments] = useState(true)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -57,9 +58,12 @@ export default function Signup() {
       return
     }
 
-    if (user && selectedSkills.length > 0) {
+    if (user && (selectedSkills.length > 0 || !showCompliments)) {
       setTimeout(async () => {
-        await supabase.from('profiles').update({ skills: selectedSkills }).eq('id', user.id)
+        const updates = {}
+        if (selectedSkills.length > 0) updates.skills = selectedSkills
+        if (!showCompliments) updates.show_compliments = false
+        await supabase.from('profiles').update(updates).eq('id', user.id)
       }, 600)
     }
 
@@ -168,6 +172,19 @@ export default function Signup() {
               ))}
             </div>
           </div>
+
+          {/* Show compliments toggle */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showCompliments}
+              onChange={e => setShowCompliments(e.target.checked)}
+              style={{ marginTop: '0.15rem', accentColor: '#237371', width: '16px', height: '16px', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: '0.8rem', color: '#2A272A', lineHeight: 1.5 }}>
+              Show compliments I receive on my public profile
+            </span>
+          </label>
 
           {error && (
             <p style={{ color: '#c0392b', fontSize: '0.875rem', backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.75rem 1rem' }}>

@@ -18,6 +18,7 @@ export default function MyApplications() {
   const [reviewedPosts, setReviewedPosts] = useState([])
   const [dismissing, setDismissing] = useState(null)
   const [cancelling, setCancelling] = useState(null)
+  const [cancellingExchange, setCancellingExchange] = useState(null)
 
   useEffect(() => {
     const init = async () => {
@@ -55,11 +56,23 @@ export default function MyApplications() {
     setLoading(false)
   }
 
+  // Cancel a pending application (deletes it)
   const handleCancel = async (applicationId) => {
     setCancelling(applicationId)
     await supabase.from('applications').delete().eq('id', applicationId)
     setApplications(prev => prev.filter(a => a.id !== applicationId))
     setCancelling(null)
+  }
+
+  // Cancel an approved/in-progress exchange
+  const handleCancelExchange = async (applicationId, postId) => {
+    setCancellingExchange(applicationId)
+    // Mark application as cancelled (triggers DB notification to both parties)
+    await supabase.from('applications').update({ status: 'cancelled' }).eq('id', applicationId)
+    // Return post to open so new applicants can apply
+    await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
+    await fetchApplications(currentUserId)
+    setCancellingExchange(null)
   }
 
   const handleDismiss = async (applicationId) => {
@@ -72,15 +85,14 @@ export default function MyApplications() {
     setDismissing(null)
   }
 
-  const submitReview = async (rating, comment) => {
+  const submitReview = async (selectedQualities) => {
     if (!reviewModal) return
     setSubmittingReview(true)
     await supabase.from('reviews').insert({
       post_id: reviewModal.postId,
       reviewer_id: currentUserId,
       reviewee_id: reviewModal.revieweeId,
-      rating,
-      comment: comment || null,
+      selected_qualities: selectedQualities,
     })
     setReviewedPosts(prev => [...prev, reviewModal.postId])
     setReviewModal(null)
@@ -96,6 +108,8 @@ export default function MyApplications() {
   const getPostStatus = (app) => {
     const post = app.service_posts
     if (!post) return 'unknown'
+
+    if (app.status === 'cancelled') return 'cancelled'
 
     const otherApproved = post.applications?.find(
       a => a.status === 'approved' && a.applicant_id !== currentUserId
@@ -114,6 +128,7 @@ export default function MyApplications() {
     completed: { bg: '#EBF5F0', color: '#237371', label: '✓ Completed' },
     pending: { bg: '#F5F5F3', color: '#94B7A2', label: '⏳ Pending Review' },
     someone_else_accepted: { bg: '#FEF9E7', color: '#D4A017', label: '⚠ Someone Else Was Accepted' },
+    cancelled: { bg: '#fdf0ef', color: '#c0392b', label: '✕ Exchange Cancelled' },
     unknown: { bg: '#F5F5F3', color: '#94B7A2', label: 'Unknown' },
   }
 
@@ -147,8 +162,9 @@ export default function MyApplications() {
             {applications.map(app => {
               const postStatus = getPostStatus(app)
               const isCompleted = postStatus === 'completed'
+              const isCancelled = postStatus === 'cancelled'
               const alreadyReviewed = reviewedPosts.includes(app.service_posts?.id)
-              const isDismissable = postStatus === 'someone_else_accepted'
+              const isDismissable = postStatus === 'someone_else_accepted' || isCancelled
               const acceptedPerson = app.service_posts?.applications?.find(
                 a => a.status === 'approved' && a.applicant_id !== currentUserId
               )
@@ -158,16 +174,16 @@ export default function MyApplications() {
                 <div
                   key={app.id}
                   style={{
-                    backgroundColor: isCompleted ? '#FAFAFA' : '#FEFFFF',
+                    backgroundColor: isCompleted || isCancelled ? '#FAFAFA' : '#FEFFFF',
                     border: '1px solid #E0E0DC',
                     borderRadius: '1rem',
                     padding: '1.5rem',
                     boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
-                    opacity: isCompleted ? 0.8 : isDismissable ? 0.85 : 1,
+                    opacity: isCompleted || isCancelled ? 0.8 : isDismissable ? 0.85 : 1,
                     position: 'relative'
                   }}
                 >
-                  {/* Dismiss button for rejected */}
+                  {/* Dismiss button for rejected/cancelled */}
                   {isDismissable && (
                     <button
                       onClick={() => handleDismiss(app.id)}
@@ -199,16 +215,16 @@ export default function MyApplications() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', paddingRight: isDismissable ? '2rem' : 0 }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{app.service_posts?.category}</span>
-                      <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>{app.service_posts?.title}</h2>
+                      <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: isCompleted || isCancelled ? '#94B7A2' : '#2A272A' }}>{app.service_posts?.title}</h2>
                       <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginTop: '0.15rem' }}>
                         Posted by{' '}
-                        <Link href={`/profile/${app.service_posts?.poster_id}`} style={{ color: isCompleted ? '#94B7A2' : '#237371', textDecoration: 'none', fontWeight: 600 }}>
+                        <Link href={`/profile/${app.service_posts?.poster_id}`} style={{ color: isCompleted || isCancelled ? '#94B7A2' : '#237371', textDecoration: 'none', fontWeight: 600 }}>
                           {app.service_posts?.profiles?.full_name || app.service_posts?.profiles?.username}
                         </Link>
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>
-                      <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>{app.service_posts?.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
+                      <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, color: isCompleted || isCancelled ? '#94B7A2' : '#237371', lineHeight: 1 }}>{app.service_posts?.hours_required}<span style={{ fontSize: '0.9rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span></p>
                     </div>
                   </div>
 
@@ -220,7 +236,7 @@ export default function MyApplications() {
                   )}
 
                   {/* Someone else accepted notice */}
-                  {isDismissable && (
+                  {postStatus === 'someone_else_accepted' && (
                     <div style={{ backgroundColor: '#FEF9E7', border: '1px solid #D4A017', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#D4A017', fontWeight: 600 }}>
                       {acceptedPerson
                         ? `${acceptedPerson.profiles?.full_name || acceptedPerson.profiles?.username} was selected for this request.`
@@ -245,9 +261,18 @@ export default function MyApplications() {
                         </button>
                       )}
                       {postStatus === 'approved' && (
-                        <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}>
-                          💬 Messages
-                        </Link>
+                        <>
+                          <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem' }}>
+                            💬 Messages
+                          </Link>
+                          <button
+                            onClick={() => handleCancelExchange(app.id, app.service_posts?.id)}
+                            disabled={cancellingExchange === app.id}
+                            style={{ padding: '0.5rem 1.25rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: cancellingExchange === app.id ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+                          >
+                            {cancellingExchange === app.id ? 'Cancelling...' : 'Cancel Exchange'}
+                          </button>
+                        </>
                       )}
                       {postStatus === 'completed' && (
                         <Link href={`/messages/${app.id}`} style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#94B7A2', fontWeight: 700, borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.875rem', border: '1px solid #E0E0DC' }}>
@@ -263,11 +288,11 @@ export default function MyApplications() {
                           })}
                           style={{ padding: '0.5rem 1.25rem', backgroundColor: '#FEF9E7', color: '#D4A017', fontWeight: 700, borderRadius: '0.5rem', border: '1px solid #D4A017', cursor: 'pointer', fontSize: '0.875rem' }}
                         >
-                          ★ Leave a Review
+                          ★ Leave a Compliment
                         </button>
                       )}
                       {isCompleted && alreadyReviewed && (
-                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600 }}>✓ Reviewed</span>
+                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600 }}>✓ Compliment Left</span>
                       )}
                       {isDismissable && (
                         <button

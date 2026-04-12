@@ -59,15 +59,14 @@ export default function History() {
     init()
   }, [])
 
-  const submitReview = async (rating, comment) => {
+  const submitReview = async (selectedQualities) => {
     if (!reviewModal) return
     setSubmittingReview(true)
     await supabase.from('reviews').insert({
       post_id: reviewModal.postId,
       reviewer_id: currentUserId,
       reviewee_id: reviewModal.revieweeId,
-      rating,
-      comment: comment || null,
+      selected_qualities: selectedQualities,
     })
     setReviewedPostIds(prev => [...prev, reviewModal.postId])
     setReviewModal(null)
@@ -164,10 +163,10 @@ export default function History() {
                           })}
                           style={{ padding: '0.5rem 1.25rem', backgroundColor: '#FEF9E7', color: '#D4A017', fontWeight: 700, borderRadius: '0.5rem', border: '1px solid #D4A017', cursor: 'pointer', fontSize: '0.875rem' }}
                         >
-                          ★ Leave a Review
+                          ★ Leave a Compliment
                         </button>
                       ) : (
-                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600, alignSelf: 'center' }}>✓ Reviewed</span>
+                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600, alignSelf: 'center' }}>✓ Compliment Left</span>
                       )}
                     </div>
                   </div>
@@ -246,10 +245,10 @@ export default function History() {
                           })}
                           style={{ padding: '0.5rem 1.25rem', backgroundColor: '#FEF9E7', color: '#D4A017', fontWeight: 700, borderRadius: '0.5rem', border: '1px solid #D4A017', cursor: 'pointer', fontSize: '0.875rem' }}
                         >
-                          ★ Leave a Review
+                          ★ Leave a Compliment
                         </button>
                       ) : alreadyReviewed ? (
-                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600, alignSelf: 'center' }}>✓ Reviewed</span>
+                        <span style={{ fontSize: '0.8rem', color: '#94B7A2', fontWeight: 600, alignSelf: 'center' }}>✓ Compliment Left</span>
                       ) : null}
                     </div>
                   </div>
