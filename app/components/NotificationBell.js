@@ -104,6 +104,17 @@ function TypeIcon({ type }) {
       </div>
     )
   }
+  if (type === 'admin_warning') {
+    return (
+      <div style={{ ...base, backgroundColor: '#fff4e5' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e67e22" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+    )
+  }
   return (
     <div style={{ ...base, backgroundColor: '#f5f5f3' }}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94B7A2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -292,8 +303,8 @@ export default function NotificationBell() {
                     alignItems: 'flex-start',
                     padding: '0.875rem 1rem',
                     borderBottom: i < notifications.length - 1 ? '1px solid #E0E0DC' : 'none',
-                    backgroundColor: n.is_read ? '#FEFFFF' : '#f0f8f7',
-                    borderLeft: n.is_read ? '3px solid transparent' : '3px solid #237371',
+                    backgroundColor: n.type === 'admin_warning' && !n.is_read ? '#fff9f4' : n.is_read ? '#FEFFFF' : '#f0f8f7',
+                    borderLeft: n.type === 'admin_warning' && !n.is_read ? '3px solid #e67e22' : n.is_read ? '3px solid transparent' : '3px solid #237371',
                     cursor: 'pointer',
                   }}
                 >

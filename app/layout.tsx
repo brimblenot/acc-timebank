@@ -5,6 +5,7 @@ import { NotificationsProvider } from './context/NotificationsContext'
 import MessagesOverlay from './components/MessagesOverlay'
 import FloatingMessageButton from './components/FloatingMessageButton'
 import AccessibilityWidget from './components/AccessibilityWidget'
+import SuspensionGuard from './components/SuspensionGuard'
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body style={{ fontFamily: 'var(--font-nunito)', margin: 0, padding: 0 }}>
         <MessagesProvider>
           <NotificationsProvider>
+            <SuspensionGuard />
             {children}
             <MessagesOverlay />
             <FloatingMessageButton />
