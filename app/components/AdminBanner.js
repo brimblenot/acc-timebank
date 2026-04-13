@@ -36,7 +36,7 @@ export default function AdminBanner() {
       title="Go to Admin Panel"
       style={{
         position: 'fixed',
-        bottom: '1.5rem',
+        bottom: '5rem',
         right: '1.5rem',
         zIndex: 200,
         backgroundColor: '#237371',

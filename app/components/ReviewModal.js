@@ -12,6 +12,15 @@ const QUALITY_TAGS = [
   'Would Recommend',
 ]
 
+export const QUALITY_EMOJIS = {
+  'Timeliness': '⏰',
+  'Followed Directions': '✅',
+  'Courteous': '🤝',
+  'Great Communication': '💬',
+  'Went Above and Beyond': '⭐',
+  'Would Recommend': '👍',
+}
+
 export default function ReviewModal({ revieweeName, onSubmit, onClose, submitting, messagesLink }) {
   const [selected, setSelected] = useState([])
 
@@ -51,7 +60,7 @@ export default function ReviewModal({ revieweeName, onSubmit, onClose, submittin
                   transition: 'all 0.15s',
                 }}
               >
-                {isActive ? '✓ ' : ''}{tag}
+                {isActive ? '✓ ' : ''}{QUALITY_EMOJIS[tag]} {tag}
               </button>
             )
           })}

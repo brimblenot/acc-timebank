@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import NavLinks from '../../components/NavLinks'
+import { QUALITY_EMOJIS } from '../../components/ReviewModal'
 
 const SKILLS = [
   'Cooking & Meals', 'Transportation', 'Home Repair', 'Gardening & Yard Work',
@@ -379,7 +380,7 @@ export default function ProfilePage() {
                           key={tag}
                           style={{ padding: '0.3rem 0.75rem', backgroundColor: '#EBF5F0', color: '#237371', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600, border: '1px solid #c5e3da' }}
                         >
-                          {tag}
+                          {QUALITY_EMOJIS[tag] ? `${QUALITY_EMOJIS[tag]} ${tag}` : tag}
                         </span>
                       ))}
                     </div>
