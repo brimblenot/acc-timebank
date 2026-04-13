@@ -86,6 +86,7 @@ function StatusBadge({ status }) {
 export default function AdminPage() {
   const router = useRouter()
   const [adminId, setAdminId] = useState(null)
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Posts
@@ -115,15 +116,22 @@ export default function AdminPage() {
   // Warning history
   const [warnings, setWarnings] = useState([])
 
+  // Manage admins (master admin only)
+  const [adminUsers, setAdminUsers] = useState([])
+  const [adminSearch, setAdminSearch] = useState('')
+  const [makingAdmin, setMakingAdmin] = useState(null)
+  const [revokingAdmin, setRevokingAdmin] = useState(null)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('is_admin, is_master_admin').eq('id', user.id).single()
       if (!profile?.is_admin) { router.push('/dashboard'); return }
 
       setAdminId(user.id)
+      setIsMasterAdmin(profile.is_master_admin || false)
       await fetchAll()
       setLoading(false)
     }
@@ -131,7 +139,7 @@ export default function AdminPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAll = async () => {
-    const [postsRes, usersRes, suspensionsRes, warningsRes] = await Promise.all([
+    const [postsRes, usersRes, adminUsersRes, suspensionsRes, warningsRes] = await Promise.all([
       supabase
         .from('service_posts')
         .select('id, title, category, status, created_at, poster_id, profiles!poster_id(full_name, username)')
@@ -140,6 +148,12 @@ export default function AdminPage() {
         .from('profiles')
         .select('id, full_name, username, created_at')
         .eq('is_admin', false)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('id, full_name, username, created_at')
+        .eq('is_admin', true)
+        .eq('is_master_admin', false)
         .order('created_at', { ascending: false }),
       supabase
         .from('suspensions')
@@ -155,6 +169,7 @@ export default function AdminPage() {
 
     setPosts(postsRes.data || [])
     setUsers(usersRes.data || [])
+    setAdminUsers(adminUsersRes.data || [])
     setSuspensions(suspensionsRes.data || [])
 
     // Enrich warnings with profile names
@@ -256,6 +271,34 @@ export default function AdminPage() {
     setUnsuspending(null)
   }
 
+  // ─── Make / Revoke admin ─────────────────────────
+
+  const handleMakeAdmin = async (userId) => {
+    setMakingAdmin(userId)
+    const { error } = await supabase.from('profiles').update({ is_admin: true }).eq('id', userId)
+    if (!error) {
+      const user = users.find(u => u.id === userId)
+      if (user) {
+        setAdminUsers(prev => [...prev, user])
+        setUsers(prev => prev.filter(u => u.id !== userId))
+      }
+    }
+    setMakingAdmin(null)
+  }
+
+  const handleRevokeAdmin = async (userId) => {
+    setRevokingAdmin(userId)
+    const { error } = await supabase.from('profiles').update({ is_admin: false }).eq('id', userId)
+    if (!error) {
+      const user = adminUsers.find(u => u.id === userId)
+      if (user) {
+        setUsers(prev => [user, ...prev])
+        setAdminUsers(prev => prev.filter(u => u.id !== userId))
+      }
+    }
+    setRevokingAdmin(null)
+  }
+
   // ─── Filters ──────────────────────────────────────
 
   const filteredPosts = posts.filter(p => {
@@ -268,6 +311,11 @@ export default function AdminPage() {
     const q = usersSearch.toLowerCase()
     return !q || u.full_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q) ||
       emailMap[u.id]?.toLowerCase().includes(q)
+  })
+
+  const filteredAdminSearch = users.filter(u => {
+    const q = adminSearch.toLowerCase()
+    return !q || u.full_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q)
   })
 
   if (loading) return (
@@ -475,7 +523,105 @@ export default function AdminPage() {
         </section>
 
         {/* ──────────────────────────────────────────────────
-            SECTION 3: WARNING HISTORY
+            SECTION 3: MANAGE ADMINS (master admin only)
+        ────────────────────────────────────────────────── */}
+        {isMasterAdmin && (
+          <section style={{ marginBottom: '4rem' }}>
+            <SectionHeader title="Manage Admins" subtitle="Grant or revoke admin access for community members" />
+
+            {/* Current admins */}
+            <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Current Admins</p>
+            <div style={{ border: '1px solid #E0E0DC', borderRadius: '0.75rem', overflow: 'hidden', marginBottom: '2rem' }}>
+              {adminUsers.length === 0 ? (
+                <p style={{ padding: '1.5rem', color: '#94B7A2', fontSize: '0.875rem', textAlign: 'center' }}>No regular admins yet.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Name</th>
+                        <th style={thStyle}>Username</th>
+                        <th style={thStyle}>Joined</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminUsers.map(u => (
+                        <tr key={u.id} style={{ backgroundColor: '#FEFFFF' }}>
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>
+                            <Link href={`/profile/${u.id}`} target="_blank" style={{ color: '#2A272A', textDecoration: 'none' }}>
+                              {u.full_name || '—'}
+                            </Link>
+                          </td>
+                          <td style={{ ...tdStyle, color: '#94B7A2' }}>@{u.username || '—'}</td>
+                          <td style={{ ...tdStyle, color: '#94B7A2', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right' }}>
+                            <button
+                              onClick={() => handleRevokeAdmin(u.id)}
+                              disabled={revokingAdmin === u.id}
+                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#fdf0ef', color: '#c0392b', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #f5c6c2', cursor: revokingAdmin === u.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                            >
+                              {revokingAdmin === u.id ? '…' : 'Revoke Admin'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Grant admin to a regular user */}
+            <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Grant Admin Access</p>
+            <SearchInput value={adminSearch} onChange={setAdminSearch} placeholder="Search by name or username…" />
+            <div style={{ border: '1px solid #E0E0DC', borderRadius: '0.75rem', overflow: 'hidden' }}>
+              {filteredAdminSearch.length === 0 ? (
+                <p style={{ padding: '1.5rem', color: '#94B7A2', fontSize: '0.875rem', textAlign: 'center' }}>
+                  {adminSearch ? 'No users match your search.' : 'No regular users found.'}
+                </p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Name</th>
+                        <th style={thStyle}>Username</th>
+                        <th style={thStyle}>Joined</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAdminSearch.map(u => (
+                        <tr key={u.id} style={{ backgroundColor: '#FEFFFF' }}>
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>
+                            <Link href={`/profile/${u.id}`} target="_blank" style={{ color: '#2A272A', textDecoration: 'none' }}>
+                              {u.full_name || '—'}
+                            </Link>
+                          </td>
+                          <td style={{ ...tdStyle, color: '#94B7A2' }}>@{u.username || '—'}</td>
+                          <td style={{ ...tdStyle, color: '#94B7A2', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right' }}>
+                            <button
+                              onClick={() => handleMakeAdmin(u.id)}
+                              disabled={makingAdmin === u.id}
+                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #94B7A2', cursor: makingAdmin === u.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                            >
+                              {makingAdmin === u.id ? '…' : 'Make Admin'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ──────────────────────────────────────────────────
+            SECTION 4: WARNING HISTORY
         ────────────────────────────────────────────────── */}
         <section>
           <SectionHeader title="Warning History" subtitle="All warnings sent to members, most recent first" />
