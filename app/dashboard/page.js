@@ -27,8 +27,6 @@ export default function Dashboard() {
         .eq('id', user.id)
         .single()
 
-      if (data?.is_admin) { router.push('/admin'); return }
-
       setProfile(data)
       fetchStats(user.id)
       setLoading(false)

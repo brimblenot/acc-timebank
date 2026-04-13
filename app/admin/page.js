@@ -127,11 +127,26 @@ export default function AdminPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: profile } = await supabase.from('profiles').select('is_admin, is_master_admin').eq('id', user.id).single()
+      // Step 1: verify admin access (only is_admin — safe even if master_admin.sql not yet applied)
+      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
       if (!profile?.is_admin) { router.push('/dashboard'); return }
 
       setAdminId(user.id)
-      setIsMasterAdmin(profile.is_master_admin || false)
+
+      // Step 2: check master admin status in a separate, guarded query so a missing
+      // is_master_admin column (migration not yet applied) does not crash the page.
+      const { data: masterProfile, error: masterErr } = await supabase
+        .from('profiles')
+        .select('is_master_admin')
+        .eq('id', user.id)
+        .single()
+      if (masterErr) {
+        console.warn('[admin] is_master_admin unavailable — run supabase/master_admin.sql:', masterErr.message)
+      } else {
+        console.log('[admin] is_master_admin =', masterProfile?.is_master_admin)
+        setIsMasterAdmin(masterProfile?.is_master_admin === true)
+      }
+
       await fetchAll()
       setLoading(false)
     }
@@ -139,7 +154,7 @@ export default function AdminPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAll = async () => {
-    const [postsRes, usersRes, adminUsersRes, suspensionsRes, warningsRes] = await Promise.all([
+    const [postsRes, usersRes, suspensionsRes, warningsRes] = await Promise.all([
       supabase
         .from('service_posts')
         .select('id, title, category, status, created_at, poster_id, profiles!poster_id(full_name, username)')
@@ -148,12 +163,6 @@ export default function AdminPage() {
         .from('profiles')
         .select('id, full_name, username, created_at')
         .eq('is_admin', false)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('profiles')
-        .select('id, full_name, username, created_at')
-        .eq('is_admin', true)
-        .eq('is_master_admin', false)
         .order('created_at', { ascending: false }),
       supabase
         .from('suspensions')
@@ -169,7 +178,19 @@ export default function AdminPage() {
 
     setPosts(postsRes.data || [])
     setUsers(usersRes.data || [])
-    setAdminUsers(adminUsersRes.data || [])
+
+    // Fetch current admins separately — guarded in case migration hasn't run yet
+    const { data: adminUsersData, error: adminUsersErr } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, created_at')
+      .eq('is_admin', true)
+      .eq('is_master_admin', false)
+      .order('created_at', { ascending: false })
+    if (adminUsersErr) {
+      console.warn('[admin] Could not load admin users list:', adminUsersErr.message)
+    } else {
+      setAdminUsers(adminUsersData || [])
+    }
     setSuspensions(suspensionsRes.data || [])
 
     // Enrich warnings with profile names
@@ -339,12 +360,26 @@ export default function AdminPage() {
             <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#c0392b', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Admin Panel</span>
           </div>
         </Link>
-        <button
-          onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
-          style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
-        >
-          Log Out
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') localStorage.setItem('adminMode', 'true')
+              router.push('/dashboard')
+            }}
+            style={{ padding: '0.5rem 1.25rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #94B7A2', cursor: 'pointer', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            Member View
+          </button>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
+            style={{ padding: '0.5rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
+          >
+            Log Out
+          </button>
+        </div>
       </nav>
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '3rem 1.5rem' }}>
