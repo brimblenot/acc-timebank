@@ -19,13 +19,26 @@ export default function MyApplications() {
   const [dismissing, setDismissing] = useState(null)
   const [cancelling, setCancelling] = useState(null)
   const [cancellingExchange, setCancellingExchange] = useState(null)
+  const [currentUserName, setCurrentUserName] = useState('')
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
+
+      const { data: prof } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).single()
+      setCurrentUserName(prof?.full_name || prof?.username || 'Someone')
+
       fetchApplications(user.id)
+
+      const channel = supabase
+        .channel('my-apps-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => fetchApplications(user.id))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_posts' }, () => fetchApplications(user.id))
+        .subscribe()
+
+      return () => supabase.removeChannel(channel)
     }
     init()
   }, [])
@@ -64,13 +77,27 @@ export default function MyApplications() {
     setCancelling(null)
   }
 
-  // Cancel an approved/in-progress exchange
+  // Cancel an approved/in-progress exchange (applicant is always the one using this page)
   const handleCancelExchange = async (applicationId, postId) => {
     setCancellingExchange(applicationId)
-    // Mark application as cancelled (triggers DB notification to both parties)
+    // Cancel this application
     await supabase.from('applications').update({ status: 'cancelled' }).eq('id', applicationId)
-    // Return post to open so new applicants can apply
+    // Reopen the post so a new applicant can be found
     await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
+    // Decline any other pending applications so the post starts fresh
+    await supabase
+      .from('applications')
+      .update({ status: 'declined' })
+      .eq('post_id', postId)
+      .eq('status', 'pending')
+      .neq('id', applicationId)
+    // Insert a system message in the conversation thread
+    await supabase.from('messages').insert({
+      application_id: applicationId,
+      sender_id: currentUserId,
+      content: `${currentUserName} has left this exchange. The post has been reopened for new applicants.`,
+      is_system: true,
+    })
     await fetchApplications(currentUserId)
     setCancellingExchange(null)
   }

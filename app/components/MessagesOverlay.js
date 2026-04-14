@@ -19,14 +19,18 @@ export default function MessagesOverlay() {
     userId,
     endedConvos,
     leaveConversation,
+    approveHours,
+    declineHours,
+    approving,
+    hourError,
   } = useMessages()
 
-  const [leaveConfirm, setLeaveConfirm] = useState(false)
+  const [leaveModal, setLeaveModal] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [mobileView, setMobileView] = useState('list') // 'list' | 'thread'
   const bottomRef = useRef(null)
 
-  // Track viewport width for responsive layout
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
     check()
@@ -34,12 +38,10 @@ export default function MessagesOverlay() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Reset to list view whenever the panel opens
   useEffect(() => {
     if (isOpen) setMobileView('list')
   }, [isOpen])
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -53,7 +55,15 @@ export default function MessagesOverlay() {
 
   const handleBack = () => setMobileView('list')
 
-  // ── Layout helpers ──────────────────────────────────────────
+  const handleLeave = async () => {
+    if (leaving || !activeConvo) return
+    setLeaving(true)
+    await leaveConversation(activeConvo)
+    setLeaving(false)
+    setLeaveModal(false)
+    if (isMobile) setMobileView('list')
+  }
+
   const showList   = !isMobile || mobileView === 'list'
   const showThread = !isMobile || mobileView === 'thread'
 
@@ -94,7 +104,6 @@ export default function MessagesOverlay() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
-      {/* Backdrop — only tappable on desktop where it's visible */}
       {!isMobile && (
         <div
           style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.4)' }}
@@ -170,51 +179,32 @@ export default function MessagesOverlay() {
             <>
               {/* Thread header */}
               <div style={{ padding: isMobile ? '0.875rem 1rem' : '1.25rem 1.5rem', borderBottom: '1px solid #E0E0DC', flexShrink: 0 }}>
-                {leaveConfirm ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    {isMobile && (
-                      <button
-                        onClick={handleBack}
-                        style={{ color: '#94B7A2', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, padding: 0, marginRight: '0.25rem', flexShrink: 0 }}
-                      >
-                        ‹ Back
-                      </button>
-                    )}
-                    <p style={{ color: '#c0392b', fontSize: '0.8rem', fontWeight: 600, flex: 1 }}>End this conversation?</p>
-                    <button onClick={async () => { await leaveConversation(activeConvo); setLeaveConfirm(false) }} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Yes, Leave</button>
-                    <button onClick={() => setLeaveConfirm(false)} style={{ padding: '0.35rem 0.875rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : 0, justifyContent: isMobile ? 'flex-start' : 'space-between' }}>
+                  {isMobile && (
+                    <button
+                      onClick={handleBack}
+                      aria-label="Back to conversations"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#237371', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 700, padding: 0, flexShrink: 0 }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                      </svg>
+                      Back
+                    </button>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 700, color: '#2A272A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeConvo.otherPerson}</p>
+                    <p style={{ color: '#94B7A2', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeConvo.title}</p>
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : 0, justifyContent: isMobile ? 'flex-start' : 'space-between' }}>
-                    {/* Back button — mobile only */}
-                    {isMobile && (
-                      <button
-                        onClick={handleBack}
-                        aria-label="Back to conversations"
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#237371', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 700, padding: 0, flexShrink: 0 }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="15 18 9 12 15 6" />
-                        </svg>
-                        Back
-                      </button>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 700, color: '#2A272A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeConvo.otherPerson}</p>
-                      <p style={{ color: '#94B7A2', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeConvo.title}</p>
-                    </div>
-                    {!isMobile && !endedConvos[activeConvo.id] && (
-                      <button onClick={() => setLeaveConfirm(true)} style={{ fontSize: '0.75rem', color: '#94B7A2', background: 'none', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.3rem 0.75rem', cursor: 'pointer', flexShrink: 0, marginLeft: '0.75rem' }}>
-                        Leave Chat
-                      </button>
-                    )}
-                    {isMobile && !endedConvos[activeConvo.id] && (
-                      <button onClick={() => setLeaveConfirm(true)} style={{ fontSize: '0.75rem', color: '#94B7A2', background: 'none', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.3rem 0.6rem', cursor: 'pointer', flexShrink: 0 }}>
-                        Leave
-                      </button>
-                    )}
-                  </div>
-                )}
+                  {!endedConvos[activeConvo.id] && (
+                    <button
+                      onClick={() => setLeaveModal(true)}
+                      style={{ fontSize: '0.75rem', color: '#94B7A2', background: 'none', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.3rem 0.75rem', cursor: 'pointer', flexShrink: 0, marginLeft: isMobile ? 0 : '0.75rem' }}
+                    >
+                      Leave
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Messages */}
@@ -224,15 +214,69 @@ export default function MessagesOverlay() {
                     <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No messages yet. Say hello!</p>
                   </div>
                 ) : messages.map(msg => {
+
+                  // ── Hour-request card ──
+                  if (msg.is_hour_request) {
+                    if (msg.hour_request_status !== 'pending') return null
+                    const isRequester = msg.sender_id === userId
+                    const isActioning = approving === msg.id
+                    return (
+                      <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem 0' }}>
+                        <div style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1rem 1.25rem', maxWidth: '300px', width: '100%', textAlign: 'center', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#2A272A', marginBottom: '0.5rem' }}>{msg.content}</p>
+                          {!isRequester && (
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                              <button
+                                onClick={() => approveHours(msg)}
+                                disabled={isActioning}
+                                style={{ padding: '0.35rem 0.875rem', backgroundColor: isActioning ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                              >
+                                {isActioning ? 'Approving…' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => declineHours(msg)}
+                                disabled={isActioning}
+                                style={{ padding: '0.35rem 0.875rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+                          {isRequester && (
+                            <span style={{ fontSize: '0.75rem', color: '#94B7A2' }}>Awaiting response...</span>
+                          )}
+                          {hourError && !isRequester && (
+                            <p style={{ fontSize: '0.75rem', color: '#c0392b', marginTop: '0.4rem' }}>{hourError}</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // ── System message ──
                   if (msg.is_system) {
                     return (
                       <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem 0' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94B7A2', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '9999px', padding: '0.3rem 1rem' }}>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          color: '#94B7A2',
+                          fontStyle: 'italic',
+                          backgroundColor: '#F5F5F3',
+                          border: '1px solid #E0E0DC',
+                          borderRadius: '9999px',
+                          padding: '0.3rem 1rem',
+                          maxWidth: '380px',
+                          textAlign: 'center',
+                          display: 'block',
+                          lineHeight: '1.5',
+                        }}>
                           {msg.content}
                         </span>
                       </div>
                     )
                   }
+
+                  // ── Regular chat bubble ──
                   const isMe = msg.sender_id === userId
                   return (
                     <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
@@ -246,6 +290,7 @@ export default function MessagesOverlay() {
                         borderBottomRightRadius: isMe ? '2px' : '1rem',
                         borderBottomLeftRadius: isMe ? '1rem' : '2px',
                         wordBreak: 'break-word',
+                        border: isMe ? 'none' : '1px solid #E0E0DC',
                       }}>
                         <p>{msg.content}</p>
                         <p style={{ fontSize: '0.7rem', marginTop: '0.25rem', opacity: 0.7 }}>
@@ -258,7 +303,7 @@ export default function MessagesOverlay() {
                 <div ref={bottomRef} />
               </div>
 
-              {/* Input */}
+              {/* Input — stays active unless conversation was ended by a leave */}
               {endedConvos[activeConvo.id] ? (
                 <div style={{ padding: isMobile ? '0.875rem 1rem' : '1rem 1.5rem', borderTop: '1px solid #E0E0DC', flexShrink: 0, textAlign: 'center' }}>
                   <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>This conversation has ended.</p>
@@ -311,6 +356,37 @@ export default function MessagesOverlay() {
         </div>
 
       </div>
+
+      {/* ── Leave confirmation modal ── */}
+      {leaveModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.5)' }} onClick={() => !leaving && setLeaveModal(false)} />
+          <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '380px', boxShadow: '0 8px 40px rgba(42,39,42,0.2)', border: '1px solid #E0E0DC' }}>
+            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#2A272A' }}>Leave this exchange?</h2>
+            <p style={{ color: '#2A272A', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '0.4rem' }}>
+              This will <strong>cancel the exchange</strong> and update the post status.
+            </p>
+            <p style={{ color: '#c0392b', fontSize: '0.8rem', marginBottom: '1.5rem' }}>This cannot be undone.</p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={handleLeave}
+                disabled={leaving}
+                style={{ flex: 1, padding: '0.875rem', backgroundColor: leaving ? '#E0E0DC' : '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: leaving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+              >
+                {leaving ? 'Leaving…' : 'Yes, leave and cancel'}
+              </button>
+              <button
+                onClick={() => setLeaveModal(false)}
+                disabled={leaving}
+                style={{ padding: '0.875rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: leaving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+              >
+                Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

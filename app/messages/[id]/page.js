@@ -109,31 +109,38 @@ export default function MessageThread() {
     const myProfile = isUserApplicant ? application.profiles : application.service_posts.profiles
     const name = myProfile?.full_name || myProfile?.username || 'Someone'
     const postId = application.service_posts.id
-    const postTitle = application.service_posts.title
 
     // 1. Cancel this application
     await supabase.from('applications').update({ status: 'cancelled' }).eq('id', id)
 
-    // 2. Reopen the service post so new applicants can apply
-    await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
+    if (isUserApplicant) {
+      // Applicant leaves: reopen post so a new applicant can be found
+      await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
+      // Decline any other pending applications so the post starts fresh
+      await supabase
+        .from('applications')
+        .update({ status: 'declined' })
+        .eq('post_id', postId)
+        .eq('status', 'pending')
+        .neq('id', id)
+      // Leave-type system message (sender_id set → marks conversation as ended)
+      await supabase.from('messages').insert({
+        application_id: id,
+        sender_id: currentUser.id,
+        content: `${name} has left this exchange. The post has been reopened for new applicants.`,
+        is_system: true,
+      })
+    } else {
+      // Poster leaves: close the post entirely — they are withdrawing it
+      await supabase.from('service_posts').update({ status: 'cancelled' }).eq('id', postId)
+      await supabase.from('messages').insert({
+        application_id: id,
+        sender_id: currentUser.id,
+        content: `${name} has cancelled this exchange and closed the post.`,
+        is_system: true,
+      })
+    }
 
-    // 3. Decline all other pending applications on this post so it starts fresh
-    await supabase
-      .from('applications')
-      .update({ status: 'declined' })
-      .eq('post_id', postId)
-      .eq('status', 'pending')
-      .neq('id', id)
-
-    // 4. Insert a leave-type system message (sender_id set → marks conversation as ended)
-    await supabase.from('messages').insert({
-      application_id: id,
-      sender_id: currentUser.id,
-      content: `${name} has left this conversation. The exchange has been cancelled and "${postTitle}" has been reopened.`,
-      is_system: true,
-    })
-
-    // 5. Redirect
     setLeaving(false)
     router.push(isUserApplicant ? '/my-applications' : '/my-posts')
   }
@@ -266,6 +273,10 @@ export default function MessageThread() {
   // Only the applicant (person who applied and was accepted) sees the request button.
   const isApplicant = currentUser?.id === application.profiles?.id
 
+  // Disable the request button if there is already a pending request in this thread.
+  // Since filterMessages strips non-pending ones, any is_hour_request in state is pending.
+  const hasPendingHourRequest = messages.some(m => m.is_hour_request)
+
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <main className="msg-page" style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A', display: 'flex', flexDirection: 'column' }}>
@@ -301,33 +312,39 @@ export default function MessageThread() {
           {!isEnded && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem', flexShrink: 0 }}>
               {/* Hint text + request button — applicant only */}
-              {isApplicant && (
+              {isApplicant && !hasPendingHourRequest && (
                 <span className="req-hours-hint" style={{ fontSize: '0.7rem', color: '#94B7A2', fontStyle: 'italic' }}>
                   Service took longer than expected?
                 </span>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {isApplicant && (
-                  <button
-                    onClick={() => { setHourModal(true); setHourAmount(''); setHourError(null) }}
-                    style={{
-                      fontSize: '0.8rem',
-                      color: '#237371',
-                      backgroundColor: '#FEFFFF',
-                      border: '1.5px solid #237371',
-                      borderRadius: '0.5rem',
-                      padding: '0 0.875rem',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      minHeight: '44px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span className="req-hours-full">Request Additional Hours</span>
-                    <span className="req-hours-short">Request Additional Hours</span>
-                  </button>
+                  hasPendingHourRequest ? (
+                    <span style={{ fontSize: '0.75rem', color: '#94B7A2', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                      Request pending...
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => { setHourModal(true); setHourAmount(''); setHourError(null) }}
+                      style={{
+                        fontSize: '0.8rem',
+                        color: '#237371',
+                        backgroundColor: '#FEFFFF',
+                        border: '1.5px solid #237371',
+                        borderRadius: '0.5rem',
+                        padding: '0 0.875rem',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        minHeight: '44px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span className="req-hours-full">Request Additional Hours</span>
+                      <span className="req-hours-short">Request Additional Hours</span>
+                    </button>
+                  )
                 )}
                 <button
                   onClick={() => setLeaveModal(true)}

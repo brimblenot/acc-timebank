@@ -63,11 +63,16 @@ export default function PostDetail() {
     setPost(postData)
     setApplications(apps || [])
 
-    const alreadyApplied = (apps || []).find(a => a.applicant_id === userId)
+    // Exclude cancelled applications — a cancelled exchange should let the user apply again
+    const alreadyApplied = (apps || []).find(a => a.applicant_id === userId && a.status !== 'cancelled')
     if (alreadyApplied) {
       setApplied(true)
       setUserApplicationId(alreadyApplied.id)
       setUserApplicationStatus(alreadyApplied.status)
+    } else {
+      setApplied(false)
+      setUserApplicationId(null)
+      setUserApplicationStatus(null)
     }
 
     setLoading(false)
@@ -188,6 +193,31 @@ export default function PostDetail() {
   const approvedApp = applications.find(a => a.status === 'approved')
   const visibleApps = applications.filter(a => a.status !== 'declined')
 
+  // Non-owners visiting a cancelled post see an unavailable message
+  if (post.status === 'cancelled' && !isOwner) {
+    return (
+      <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
+        <nav style={{ borderBottom: '1px solid #E0E0DC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2.5rem', backgroundColor: '#FEFFFF' }}>
+          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+            <Image src="/acc-logo.png" alt="ACC Logo" width={40} height={40} />
+            <span style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.2rem', fontWeight: 700, color: '#2A272A' }}>ACC Timebank</span>
+          </Link>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <NavLinks userId={currentUser?.id} />
+          </div>
+        </nav>
+        <div style={{ maxWidth: '720px', margin: '0 auto', padding: '5rem 1.5rem', textAlign: 'center' }}>
+          <p style={{ color: '#94B7A2', fontSize: '1.125rem', marginBottom: '1.5rem' }}>
+            This post is no longer available.
+          </p>
+          <Link href="/posts" style={{ backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.875rem 2rem', borderRadius: '0.75rem', textDecoration: 'none' }}>
+            Browse Other Requests
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
 
@@ -206,7 +236,7 @@ export default function PostDetail() {
         {/* Category + Status */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
           <span style={{ fontSize: '0.7rem', color: '#237371', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: '#EBF5F0', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{post.category}</span>
-          <span style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#F5F5F3', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{{ open: 'Open', in_progress: 'In Progress', completed: 'Completed' }[post.status] || post.status}</span>
+          <span style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#F5F5F3', padding: '0.25rem 0.75rem', borderRadius: '9999px' }}>{{ open: 'Open', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' }[post.status] || post.status}</span>
         </div>
 
         {/* Title + Hours */}
@@ -394,7 +424,12 @@ export default function PostDetail() {
 
           </div>
 
-        ) : /* APPLICANT VIEW */ applied ? (
+        ) : /* APPLICANT VIEW — owner's cancelled post still shows above */ post.status === 'cancelled' ? (
+          <div style={{ backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
+            <p style={{ color: '#c0392b', fontWeight: 600, marginBottom: '0.5rem' }}>This post has been cancelled</p>
+            <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>This exchange was cancelled and the post is no longer active.</p>
+          </div>
+        ) : applied ? (
           <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '1rem', padding: '1.5rem', textAlign: 'center' }}>
             <p style={{ color: '#237371', fontWeight: 700 }}>✓ You've applied to this request</p>
             <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginTop: '0.25rem' }}>The requester will review your application.</p>

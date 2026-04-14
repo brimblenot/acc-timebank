@@ -159,31 +159,34 @@ export default function MyPosts() {
   const statusColor = (status) => {
     if (status === 'open') return { bg: '#EBF5F0', color: '#237371', label: 'Open' }
     if (status === 'in_progress') return { bg: '#FEF9E7', color: '#D4A017', label: 'In Progress' }
+    if (status === 'cancelled') return { bg: '#fdf0ef', color: '#c0392b', label: 'Cancelled' }
     return { bg: '#F5F5F3', color: '#94B7A2', label: 'Completed' }
   }
 
   const openPosts = posts.filter(p => p.status === 'open')
   const inProgressPosts = posts.filter(p => p.status === 'in_progress')
   const completedPosts = posts.filter(p => p.status === 'completed')
+  const cancelledPosts = posts.filter(p => p.status === 'cancelled')
 
   const renderPostCard = (post) => {
     const sc = statusColor(post.status)
     const approvedApp = post.applications?.find(a => a.status === 'approved')
     const visibleApps = post.applications?.filter(a => a.status !== 'declined') || []
     const isCompleted = post.status === 'completed'
-    const isDeletable = post.status === 'open'
+    const isCancelled = post.status === 'cancelled'
+    const isDeletable = post.status === 'open' || post.status === 'cancelled'
     const pendingCount = post.applications?.filter(a => a.status === 'pending').length || 0
 
     return (
       <div
         key={post.id}
         style={{
-          backgroundColor: isCompleted ? '#FAFAFA' : '#FEFFFF',
+          backgroundColor: (isCompleted || isCancelled) ? '#FAFAFA' : '#FEFFFF',
           border: '1px solid #E0E0DC',
           borderRadius: '1rem',
           overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(42,39,42,0.06)',
-          opacity: isCompleted ? 0.8 : 1,
+          opacity: (isCompleted || isCancelled) ? 0.8 : 1,
         }}
       >
         {/* Post Header */}
@@ -206,13 +209,13 @@ export default function MyPosts() {
                   </span>
                 )}
               </div>
-              <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem', color: isCompleted ? '#94B7A2' : '#2A272A' }}>
+              <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem', color: (isCompleted || isCancelled) ? '#94B7A2' : '#2A272A' }}>
                 {post.title}
               </h2>
               <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>{post.description}</p>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1.5rem' }}>
-              <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: isCompleted ? '#94B7A2' : '#237371', lineHeight: 1 }}>
+              <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: (isCompleted || isCancelled) ? '#94B7A2' : '#237371', lineHeight: 1 }}>
                 {post.hours_required}<span style={{ fontSize: '1rem', fontWeight: 600, marginLeft: '0.2rem' }}>hrs</span>
               </p>
               <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '9999px', marginTop: '0.5rem', display: 'inline-block', backgroundColor: sc.bg, color: sc.color }}>
@@ -434,6 +437,19 @@ export default function MyPosts() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                   {completedPosts.map(renderPostCard)}
+                </div>
+              </div>
+            )}
+
+            {/* ── Cancelled Posts ─────────────────────────────── */}
+            {cancelledPosts.length > 0 && (
+              <div style={{ marginBottom: '3rem' }}>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.15rem', color: '#c0392b' }}>Cancelled</h2>
+                  <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>Exchanges you cancelled and closed.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {cancelledPosts.map(renderPostCard)}
                 </div>
               </div>
             )}
