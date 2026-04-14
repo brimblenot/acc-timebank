@@ -121,6 +121,16 @@ html.high-contrast { filter: contrast(1.55); }
   word-break: break-word;
 }
 
+/* Request Additional Hours button — responsive label + hint text */
+.req-hours-short { display: none; }
+.req-hours-hint  { display: block; }
+
+@media (max-width: 480px) {
+  .req-hours-full  { display: none; }
+  .req-hours-short { display: inline; }
+  .req-hours-hint  { display: none; }
+}
+
 @media (max-width: 768px) {
   .msg-page {
     /* Use dynamic viewport height so the input bar stays above the browser chrome */
