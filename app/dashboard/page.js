@@ -27,6 +27,9 @@ export default function Dashboard() {
         .eq('id', user.id)
         .single()
 
+      // Organization accounts belong on /org-dashboard, not here
+      if (data?.account_type === 'organization') { router.push('/org-dashboard'); return }
+
       setProfile(data)
       fetchStats(user.id)
       setLoading(false)

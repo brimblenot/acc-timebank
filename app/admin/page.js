@@ -127,6 +127,14 @@ export default function AdminPage() {
   const [makingAdmin, setMakingAdmin] = useState(null)
   const [revokingAdmin, setRevokingAdmin] = useState(null)
 
+  // Hour management
+  const [hourModal, setHourModal] = useState(null) // { userId, userName, balance }
+  const [hourAddInput, setHourAddInput] = useState('')
+  const [hourSubtractInput, setHourSubtractInput] = useState('')
+  const [hourAdjusting, setHourAdjusting] = useState(false)
+  const [hourSuccess, setHourSuccess] = useState(null)
+  const [hourError, setHourError] = useState(null)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -166,7 +174,7 @@ export default function AdminPage() {
         .order('created_at', { ascending: false }),
       supabase
         .from('profiles')
-        .select('id, full_name, username, created_at')
+        .select('id, full_name, username, created_at, hour_balance')
         .eq('is_admin', false)
         .order('created_at', { ascending: false }),
       supabase
@@ -362,6 +370,44 @@ export default function AdminPage() {
       }
     }
     setRevokingAdmin(null)
+  }
+
+  // ─── Hour management ─────────────────────────────
+
+  const openHourModal = (user) => {
+    setHourModal({ userId: user.id, userName: user.full_name || user.username, balance: user.hour_balance ?? 0 })
+    setHourAddInput('')
+    setHourSubtractInput('')
+    setHourSuccess(null)
+    setHourError(null)
+  }
+
+  const handleAdjustHours = async (action) => {
+    const raw = action === 'add' ? hourAddInput : hourSubtractInput
+    const amount = parseInt(raw, 10)
+    if (!amount || amount < 1 || amount > 100) {
+      setHourError('Amount must be between 1 and 100.')
+      return
+    }
+    setHourAdjusting(true)
+    setHourError(null)
+    setHourSuccess(null)
+    const { data: newBalance, error } = await supabase.rpc('admin_adjust_hours', {
+      target_user: hourModal.userId,
+      amount,
+      action,
+      admin_id: adminId,
+    })
+    if (error) {
+      setHourError(error.message)
+    } else {
+      setHourModal(prev => ({ ...prev, balance: newBalance }))
+      setUsers(prev => prev.map(u => u.id === hourModal.userId ? { ...u, hour_balance: newBalance } : u))
+      setHourSuccess(`Successfully ${action === 'add' ? 'added' : 'subtracted'} ${amount} hour${amount !== 1 ? 's' : ''}.`)
+      if (action === 'add') setHourAddInput('')
+      else setHourSubtractInput('')
+    }
+    setHourAdjusting(false)
   }
 
   // ─── Filters ──────────────────────────────────────
@@ -597,6 +643,7 @@ export default function AdminPage() {
                       <th style={thStyle}>Name</th>
                       <th style={thStyle}>Username</th>
                       <th style={thStyle}>Email</th>
+                      <th style={thStyle}>Balance</th>
                       <th style={thStyle}>Joined</th>
                       <th style={thStyle}>Status</th>
                       <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
@@ -617,6 +664,9 @@ export default function AdminPage() {
                           </td>
                           <td style={{ ...tdStyle, color: '#94B7A2' }}>@{user.username || '—'}</td>
                           <td style={{ ...tdStyle, color: '#94B7A2', fontSize: '0.8rem' }}>{emailMap[user.id] || '—'}</td>
+                          <td style={{ ...tdStyle, fontWeight: 600, color: '#237371', whiteSpace: 'nowrap' }}>
+                            {user.hour_balance ?? 0} hr{(user.hour_balance ?? 0) !== 1 ? 's' : ''}
+                          </td>
                           <td style={{ ...tdStyle, color: '#94B7A2', whiteSpace: 'nowrap' }}>{formatDate(user.created_at)}</td>
                           <td style={tdStyle}>
                             {isSusp ? (
@@ -636,6 +686,12 @@ export default function AdminPage() {
                           </td>
                           <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => openHourModal(user)}
+                                style={{ padding: '0.35rem 0.875rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #94B7A2', cursor: 'pointer', fontSize: '0.8rem' }}
+                              >
+                                Hours
+                              </button>
                               <button
                                 onClick={() => { setWarnModal({ userId: user.id, userName: user.full_name || user.username }); setWarnReason('') }}
                                 style={{ padding: '0.35rem 0.875rem', backgroundColor: '#fff4e5', color: '#e67e22', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #f5c6a0', cursor: 'pointer', fontSize: '0.8rem' }}
@@ -861,6 +917,97 @@ export default function AdminPage() {
               Cancel
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* ─── Hour Management Modal ───────────────────────── */}
+      {hourModal && (
+        <Modal onClose={() => setHourModal(null)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#EBF5F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.2rem' }}>
+              ⭐
+            </div>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Manage Hours</h2>
+              <p style={{ color: '#94B7A2', fontSize: '0.8rem', margin: 0 }}>{hourModal.userName}</p>
+            </div>
+          </div>
+
+          {/* Current balance */}
+          <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.75rem', padding: '1rem 1.25rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.25rem' }}>Current Balance</p>
+            <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, color: '#237371', lineHeight: 1 }}>
+              {hourModal.balance}
+            </p>
+            <p style={{ fontSize: '0.8rem', color: '#94B7A2', marginTop: '0.15rem' }}>hours</p>
+          </div>
+
+          {/* Success / error feedback */}
+          {hourSuccess && (
+            <div style={{ backgroundColor: '#EBF5F0', border: '1px solid #94B7A2', borderRadius: '0.5rem', padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.82rem', color: '#237371', fontWeight: 600 }}>
+              ✓ {hourSuccess}
+            </div>
+          )}
+          {hourError && (
+            <div style={{ backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.82rem', color: '#c0392b' }}>
+              {hourError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            {/* Add hours */}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem', color: '#237371' }}>Add Hours</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="number" min="1" max="100"
+                  value={hourAddInput}
+                  onChange={e => setHourAddInput(e.target.value)}
+                  placeholder="1–100"
+                  style={{ flex: 1, backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.6rem 0.75rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <button
+                  onClick={() => handleAdjustHours('add')}
+                  disabled={hourAdjusting || !hourAddInput}
+                  style={{ padding: '0.6rem 1rem', backgroundColor: hourAdjusting || !hourAddInput ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: hourAdjusting || !hourAddInput ? 'not-allowed' : 'pointer', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                >
+                  {hourAdjusting ? '…' : '+ Add'}
+                </button>
+              </div>
+            </div>
+
+            {/* Subtract hours */}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem', color: '#c0392b' }}>Subtract Hours</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="number" min="1" max="100"
+                  value={hourSubtractInput}
+                  onChange={e => setHourSubtractInput(e.target.value)}
+                  placeholder="1–100"
+                  style={{ flex: 1, backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.6rem 0.75rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <button
+                  onClick={() => handleAdjustHours('subtract')}
+                  disabled={hourAdjusting || !hourSubtractInput}
+                  style={{ padding: '0.6rem 1rem', backgroundColor: hourAdjusting || !hourSubtractInput ? '#E0E0DC' : '#fdf0ef', color: hourAdjusting || !hourSubtractInput ? '#94B7A2' : '#c0392b', fontWeight: 700, borderRadius: '0.5rem', border: '1px solid', borderColor: hourAdjusting || !hourSubtractInput ? '#E0E0DC' : '#f5c6c2', cursor: hourAdjusting || !hourSubtractInput ? 'not-allowed' : 'pointer', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                >
+                  {hourAdjusting ? '…' : '− Sub'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '0.72rem', color: '#94B7A2', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+            Changes are logged in transactions and the user receives a notification. Balance cannot go below −999.
+          </p>
+
+          <button
+            onClick={() => setHourModal(null)}
+            style={{ width: '100%', padding: '0.75rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: 'pointer', fontSize: '0.875rem' }}
+          >
+            Done
+          </button>
         </Modal>
       )}
 

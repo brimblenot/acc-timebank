@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
 
@@ -8,18 +8,58 @@ export default function AdminBanner() {
   const router = useRouter()
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [sessionChecked, setSessionChecked] = useState(false)
 
-  useEffect(() => {
-    const check = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-      setIsAdmin(data?.is_admin === true)
+  const clearAdminState = useCallback(() => {
+    setIsAdmin(false)
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('adminMode')
     }
-    check()
   }, [])
 
-  // Only show on member-facing pages — not on admin, login, signup, suspended
+  const checkAdmin = useCallback(async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_admin, account_type')
+      .eq('id', userId)
+      .single()
+    // Only show banner for confirmed admin members — never for org accounts or regular members
+    if (data?.is_admin === true && data?.account_type !== 'organization') {
+      setIsAdmin(true)
+    } else {
+      clearAdminState()
+    }
+  }, [clearAdminState])
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        clearAdminState()
+        setSessionChecked(true)
+        return
+      }
+      await checkAdmin(session.user.id)
+      setSessionChecked(true)
+    }
+    init()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        clearAdminState()
+        setSessionChecked(true)
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        checkAdmin(session.user.id)
+        setSessionChecked(true)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [checkAdmin, clearAdminState])
+
+  // Don't render until the session check resolves to avoid flicker
+  if (!sessionChecked) return null
+
   const hidden =
     !isAdmin ||
     !pathname ||

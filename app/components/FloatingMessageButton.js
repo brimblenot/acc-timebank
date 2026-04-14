@@ -3,13 +3,24 @@
 import { usePathname } from 'next/navigation'
 import { useMessages } from '../context/MessagesContext'
 
-const HIDDEN_PATHS = ['/', '/login', '/signup']
+// Only show on these member-facing pages
+const ALLOWED_PATHS = new Set([
+  '/dashboard', '/posts', '/my-posts', '/my-applications',
+  '/history', '/hour-requests', '/events',
+])
+
+function isAllowedPath(pathname) {
+  if (!pathname) return false
+  if (ALLOWED_PATHS.has(pathname)) return true
+  if (pathname.startsWith('/profile/')) return true
+  return false
+}
 
 export default function FloatingMessageButton() {
   const { openMessages, totalUnread, userId } = useMessages()
   const pathname = usePathname()
 
-  if (!userId || HIDDEN_PATHS.includes(pathname)) return null
+  if (!userId || !isAllowedPath(pathname)) return null
 
   return (
     <button

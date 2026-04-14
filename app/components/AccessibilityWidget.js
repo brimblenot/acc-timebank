@@ -1,12 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 const FONT_STEPS = [
   { label: 'A',   key: 'normal', cls: ''            },
   { label: 'A+',  key: 'large',  cls: 'text-large'  },
   { label: 'A++', key: 'xl',     cls: 'text-xl'     },
 ]
+
+// Only show on these member-facing pages
+const ALLOWED_PATHS = new Set([
+  '/dashboard', '/posts', '/my-posts', '/my-applications',
+  '/history', '/hour-requests', '/events',
+])
+
+function isAllowedPath(pathname) {
+  if (!pathname) return false
+  if (ALLOWED_PATHS.has(pathname)) return true
+  if (pathname.startsWith('/profile/')) return true
+  return false
+}
 
 function applySettings({ fontStep, highContrast }) {
   const html = document.documentElement
@@ -17,6 +31,7 @@ function applySettings({ fontStep, highContrast }) {
 }
 
 export default function AccessibilityWidget() {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [fontStep, setFontStep] = useState('normal')
   const [highContrast, setHighContrast] = useState(false)
@@ -38,6 +53,8 @@ export default function AccessibilityWidget() {
     applySettings({ fontStep: newFontStep, highContrast: newHighContrast })
     localStorage.setItem('acc_a11y', JSON.stringify({ fontStep: newFontStep, highContrast: newHighContrast }))
   }
+
+  if (!isAllowedPath(pathname)) return null
 
   return (
     <>
