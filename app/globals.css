@@ -29,3 +29,77 @@ html.text-xl    { font-size: 125% !important; }
 
 /* Accessibility — high contrast via CSS filter */
 html.high-contrast { filter: contrast(1.55); }
+
+/* ─── Mobile Responsiveness ─────────────────────────────────── */
+
+/* Nav bar padding on small screens */
+@media (max-width: 768px) {
+  nav {
+    padding: 0.75rem 1rem !important;
+  }
+}
+
+/* NavLinks: wrap and shrink on mobile */
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+@media (max-width: 768px) {
+  .nav-links {
+    gap: 0.6rem !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
+  }
+  .nav-links a,
+  .nav-links button {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Content containers — ensure they don't overflow on mobile */
+@media (max-width: 640px) {
+  /* Tables inside cards become horizontally scrollable */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Form cards shouldn't have large side padding on tiny screens */
+  .form-card {
+    padding: 1.5rem !important;
+  }
+
+  /* Hour balance card: stack on mobile */
+  .balance-card {
+    flex-direction: column !important;
+    gap: 1rem;
+  }
+
+  /* Stats grids: auto-fit so they stack */
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+  }
+
+  /* Modals: near full-width on mobile */
+  .modal-inner {
+    width: 92% !important;
+    max-width: 92% !important;
+    padding: 1.5rem !important;
+  }
+}
+
+/* Floating action buttons: keep them above page footer tap zone */
+@media (max-width: 480px) {
+  .fab-messages {
+    bottom: 1rem !important;
+    right: 1rem !important;
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .fab-admin {
+    bottom: 4.5rem !important;
+    right: 1rem !important;
+  }
+}

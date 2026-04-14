@@ -116,6 +116,11 @@ export default function AdminPage() {
   // Warning history
   const [warnings, setWarnings] = useState([])
 
+  // Pending organizations
+  const [pendingOrgs, setPendingOrgs] = useState([])
+  const [approvingOrg, setApprovingOrg] = useState(null)
+  const [rejectingOrg, setRejectingOrg] = useState(null)
+
   // Manage admins (master admin only)
   const [adminUsers, setAdminUsers] = useState([])
   const [adminSearch, setAdminSearch] = useState('')
@@ -192,6 +197,15 @@ export default function AdminPage() {
       setAdminUsers(adminUsersData || [])
     }
     setSuspensions(suspensionsRes.data || [])
+
+    // Fetch pending organizations — guarded in case org_accounts.sql not yet applied
+    const { data: pendingOrgsData, error: pendingOrgsErr } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, bio, created_at')
+      .eq('account_type', 'organization')
+      .eq('org_status', 'pending')
+      .order('created_at', { ascending: false })
+    if (!pendingOrgsErr) setPendingOrgs(pendingOrgsData || [])
 
     // Enrich warnings with profile names
     const warnRows = warningsRes.data || []
@@ -292,6 +306,32 @@ export default function AdminPage() {
     setUnsuspending(null)
   }
 
+  // ─── Org approval ─────────────────────────────────
+
+  const handleApproveOrg = async (orgId, orgName) => {
+    setApprovingOrg(orgId)
+    await supabase.from('profiles').update({ org_status: 'approved' }).eq('id', orgId)
+    await supabase.from('notifications').insert({
+      user_id: orgId,
+      type: 'application_approved',
+      message: `Your organization account "${orgName}" has been approved. You can now log in and create events.`,
+    })
+    setPendingOrgs(prev => prev.filter(o => o.id !== orgId))
+    setApprovingOrg(null)
+  }
+
+  const handleRejectOrg = async (orgId, orgName) => {
+    setRejectingOrg(orgId)
+    await supabase.from('profiles').update({ org_status: 'rejected' }).eq('id', orgId)
+    await supabase.from('notifications').insert({
+      user_id: orgId,
+      type: 'application_declined',
+      message: `Your organization application for "${orgName}" was not approved at this time.`,
+    })
+    setPendingOrgs(prev => prev.filter(o => o.id !== orgId))
+    setRejectingOrg(null)
+  }
+
   // ─── Make / Revoke admin ─────────────────────────
 
   const handleMakeAdmin = async (userId) => {
@@ -388,6 +428,66 @@ export default function AdminPage() {
           <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Admin Panel</h1>
           <p style={{ color: '#94B7A2' }}>Manage posts, users, and community moderation.</p>
         </div>
+
+        {/* ──────────────────────────────────────────────────
+            SECTION 0: PENDING ORGANIZATIONS
+        ────────────────────────────────────────────────── */}
+        {pendingOrgs.length > 0 && (
+          <section style={{ marginBottom: '4rem' }}>
+            <SectionHeader title="Pending Organizations" subtitle={`${pendingOrgs.length} organization${pendingOrgs.length !== 1 ? 's' : ''} awaiting approval`} />
+            <div style={{ border: '1px solid #E0E0DC', borderRadius: '0.75rem', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Organization</th>
+                      <th style={thStyle}>Username</th>
+                      <th style={thStyle}>Description</th>
+                      <th style={thStyle}>Applied</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingOrgs.map(org => (
+                      <tr key={org.id} style={{ backgroundColor: '#FEFFFF' }}>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>
+                          <Link href={`/profile/${org.id}`} target="_blank" style={{ color: '#2A272A', textDecoration: 'none' }}>
+                            {org.full_name || '—'}
+                          </Link>
+                        </td>
+                        <td style={{ ...tdStyle, color: '#94B7A2' }}>@{org.username || '—'}</td>
+                        <td style={{ ...tdStyle, color: '#94B7A2', maxWidth: '300px', fontSize: '0.8rem' }}>
+                          <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {org.bio || '—'}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, color: '#94B7A2', whiteSpace: 'nowrap' }}>{formatDate(org.created_at)}</td>
+                        <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => handleApproveOrg(org.id, org.full_name || org.username)}
+                              disabled={approvingOrg === org.id}
+                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #94B7A2', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              {approvingOrg === org.id ? '…' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => handleRejectOrg(org.id, org.full_name || org.username)}
+                              disabled={rejectingOrg === org.id}
+                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#fdf0ef', color: '#c0392b', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #f5c6c2', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              {rejectingOrg === org.id ? '…' : 'Reject'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* ──────────────────────────────────────────────────
             SECTION 1: MANAGE POSTS

@@ -25,6 +25,11 @@ export const metadata = {
   description: 'Alachua Community Collective — A Mutual Aid Network',
 }
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export default function RootLayout({
   children,
 }: {

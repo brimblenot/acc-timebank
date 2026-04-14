@@ -29,6 +29,7 @@ export default function ProfilePage() {
   const [editData, setEditData] = useState({ full_name: '', bio: '', skills: [], vacation_mode: false, show_compliments: true })
   const [saving, setSaving] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState(null)
   const [donateModal, setDonateModal] = useState(false)
   const [donateAmount, setDonateAmount] = useState('')
   const [donating, setDonating] = useState(false)
@@ -99,18 +100,56 @@ export default function ProfilePage() {
     setSaving(false)
   }
 
+  const compressImage = (file) => new Promise((resolve, reject) => {
+    const img = new window.Image()
+    img.onload = () => {
+      const MAX = 800
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width >= height) { height = Math.round(height * MAX / width); width = MAX }
+        else { width = Math.round(width * MAX / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/jpeg', 0.85)
+      URL.revokeObjectURL(img.src)
+    }
+    img.onerror = () => reject(new Error('Could not read image'))
+    img.src = URL.createObjectURL(file)
+  })
+
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     setAvatarUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `${viewerId}/avatar.${ext}`
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    setAvatarError(null)
+
+    let blob
+    try {
+      blob = await compressImage(file)
+    } catch {
+      setAvatarError('Could not process image. Please try a different file.')
+      setAvatarUploading(false)
+      return
+    }
+
+    if (blob.size > 1024 * 1024) {
+      setAvatarError('Image is still over 1 MB after compression. Please choose a smaller image.')
+      setAvatarUploading(false)
+      return
+    }
+
+    const path = `${viewerId}/avatar.jpg`
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
     if (!uploadError) {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
       const urlWithBust = `${publicUrl}?t=${Date.now()}`
       await supabase.from('profiles').update({ avatar_url: urlWithBust }).eq('id', viewerId)
       setProfile(prev => ({ ...prev, avatar_url: urlWithBust }))
+    } else {
+      setAvatarError('Upload failed. Please try again.')
     }
     setAvatarUploading(false)
   }
@@ -211,6 +250,11 @@ export default function ProfilePage() {
                 {avatarUploading ? '⏳' : '📷'}
                 <input type="file" accept="image/*" onChange={handleAvatarUpload} disabled={avatarUploading} style={{ display: 'none' }} />
               </label>
+            )}
+            {avatarError && (
+              <div style={{ position: 'absolute', top: '80px', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.4rem 0.75rem', fontSize: '0.75rem', color: '#c0392b', zIndex: 10 }}>
+                {avatarError}
+              </div>
             )}
           </div>
           <div style={{ flex: 1 }}>

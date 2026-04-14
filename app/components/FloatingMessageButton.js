@@ -15,6 +15,7 @@ export default function FloatingMessageButton() {
     <button
       onClick={openMessages}
       title="Messages"
+      className="fab-messages"
       style={{
         position: 'fixed',
         bottom: '1.5rem',

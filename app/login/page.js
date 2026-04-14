@@ -26,10 +26,19 @@ export default function Login() {
     } else {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_admin')
+        .select('is_admin, account_type, org_status')
         .eq('id', authData.user.id)
         .single()
-      router.push(profile?.is_admin ? '/admin' : '/dashboard')
+
+      if (profile?.is_admin) {
+        router.push('/admin')
+      } else if (profile?.account_type === 'organization') {
+        if (profile.org_status === 'pending') router.push('/org-pending')
+        else if (profile.org_status === 'rejected') router.push('/org-rejected')
+        else router.push('/org-dashboard')
+      } else {
+        router.push('/dashboard')
+      }
     }
   }
 

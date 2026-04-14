@@ -44,7 +44,7 @@ export default function NavLinks({ userId }) {
   })
 
   return (
-    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+    <div className="nav-links">
       <Link href="/posts" style={s('/posts')}>Browse</Link>
       <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
         <Link href="/my-posts" style={s('/my-posts')}>My Posts</Link>
@@ -55,6 +55,7 @@ export default function NavLinks({ userId }) {
         <NavBadge count={newApprovalCount} />
       </span>
       <Link href="/history" style={s('/history')}>History</Link>
+      <Link href="/events" style={s('/events')}>Events</Link>
       <Link href="/members" style={s('/members')}>Members</Link>
       {userId && (
         <Link href={`/profile/${userId}`} style={s(`/profile/${userId}`)}>My Profile</Link>

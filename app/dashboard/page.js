@@ -83,6 +83,7 @@ export default function Dashboard() {
   const quickActions = [
     { href: '/posts', icon: '📋', label: 'Browse', sub: 'See community requests' },
     { href: '/posts/new', icon: '✏️', label: 'Post Request', sub: 'Ask for help' },
+    { href: '/events', icon: '🗓️', label: 'Events', sub: 'Sign up & earn hours' },
     { href: '/my-applications', icon: '🙋', label: 'My Applications', sub: 'Track your offers' },
     { href: '/my-posts', icon: '📬', label: 'My Posts', sub: 'Review applicants' },
     { href: '/members', icon: '👥', label: 'Members', sub: 'Find community members' },
@@ -151,7 +152,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
           {[
             { label: 'Active Posts', value: stats.activePosts },
             { label: 'Services Given', value: stats.servicesGiven },

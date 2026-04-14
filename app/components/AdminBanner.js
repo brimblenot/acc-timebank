@@ -34,6 +34,7 @@ export default function AdminBanner() {
     <button
       onClick={() => router.push('/admin')}
       title="Go to Admin Panel"
+      className="fab-admin"
       style={{
         position: 'fixed',
         bottom: '5rem',
