@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useNotifications } from '../context/NotificationsContext'
-import { useMessages } from '../context/MessagesContext'
 
 function timeAgo(dateStr) {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
@@ -104,6 +103,25 @@ function TypeIcon({ type }) {
       </div>
     )
   }
+  if (type === 'new_review') {
+    return (
+      <div style={{ ...base, backgroundColor: '#fef9e7' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="#D4A017" stroke="none">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+      </div>
+    )
+  }
+  if (type === 'event_hours_awarded' || type === 'admin_hour_adjustment') {
+    return (
+      <div style={{ ...base, backgroundColor: '#e8f4f3' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#237371" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+      </div>
+    )
+  }
   if (type === 'admin_warning') {
     return (
       <div style={{ ...base, backgroundColor: '#fff4e5' }}>
@@ -128,8 +146,7 @@ function TypeIcon({ type }) {
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
-  const { openMessages } = useMessages()
+  const { notifications, unreadCount, markAsRead, markAllAsRead, userId } = useNotifications()
   const router = useRouter()
   const wrapperRef = useRef(null)
 
@@ -147,25 +164,41 @@ export default function NotificationBell() {
     setIsOpen(false)
     if (!notification.is_read) await markAsRead(notification.id)
 
-    if (notification.type === 'message') {
-      openMessages()
-      return
-    }
-    if (notification.type === 'application') {
-      router.push('/my-posts')
-      return
-    }
-    if (notification.type === 'application_approved' || notification.type === 'application_declined') {
-      router.push('/my-applications')
-      return
-    }
-    if (notification.type === 'service_completed') {
-      router.push('/history')
-      return
-    }
-    if (notification.type === 'hour_request' || notification.type === 'hours_received' || notification.type === 'hours_declined') {
-      router.push('/hour-requests')
-      return
+    const { type, application_id } = notification
+
+    switch (type) {
+      case 'application':
+      case 'new_application':
+        router.push('/my-posts')
+        break
+      case 'application_approved':
+      case 'application_declined':
+      case 'someone_else_accepted':
+      case 'exchange_cancelled':
+        router.push('/my-applications')
+        break
+      case 'service_completed':
+      case 'hours_received':
+      case 'event_hours_awarded':
+      case 'admin_hour_adjustment':
+        router.push('/history')
+        break
+      case 'new_review':
+        router.push(userId ? `/profile/${userId}` : '/dashboard')
+        break
+      case 'message':
+      case 'new_message':
+        router.push(application_id ? `/messages/${application_id}` : '/dashboard')
+        break
+      case 'hour_request':
+      case 'hours_declined':
+        router.push('/hour-requests')
+        break
+      case 'admin_warning':
+        router.push('/dashboard')
+        break
+      default:
+        router.push('/dashboard')
     }
   }
 

@@ -75,6 +75,8 @@ export default function History() {
           .single(),
       ])
 
+      console.log('[history] event_signups response:', { data: eventSignupsRes.data, error: eventSignupsRes.error })
+
       setProvided((appsRes.data || []).filter(a => a.service_posts?.status === 'completed'))
       setRequested(postsRes.data || [])
       setReviewedPostIds((reviewsRes.data || []).map(r => r.post_id))
@@ -85,6 +87,7 @@ export default function History() {
 
       // Resolve org profiles for attended events
       const signups = eventSignupsRes.data || []
+      console.log('[history] attended signups after filter:', signups)
       const orgIds = [...new Set(signups.map(s => s.events?.org_id).filter(Boolean))]
       let orgMap = {}
       if (orgIds.length > 0) {
