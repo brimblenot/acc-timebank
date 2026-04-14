@@ -98,8 +98,4 @@ html.high-contrast { filter: contrast(1.55); }
     width: 48px !important;
     height: 48px !important;
   }
-  .fab-admin {
-    bottom: 4.5rem !important;
-    right: 1rem !important;
-  }
 }

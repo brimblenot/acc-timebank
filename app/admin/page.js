@@ -205,7 +205,11 @@ export default function AdminPage() {
       .eq('account_type', 'organization')
       .eq('org_status', 'pending')
       .order('created_at', { ascending: false })
-    if (!pendingOrgsErr) setPendingOrgs(pendingOrgsData || [])
+    console.log('[admin] pendingOrgs fetch — data:', pendingOrgsData, '| error:', pendingOrgsErr?.message ?? null)
+    if (pendingOrgsErr) {
+      console.error('[admin] pendingOrgs error — has org_accounts.sql been run?', pendingOrgsErr.message)
+    }
+    setPendingOrgs(pendingOrgsData || [])
 
     // Enrich warnings with profile names
     const warnRows = warningsRes.data || []
@@ -432,9 +436,18 @@ export default function AdminPage() {
         {/* ──────────────────────────────────────────────────
             SECTION 0: PENDING ORGANIZATIONS
         ────────────────────────────────────────────────── */}
-        {pendingOrgs.length > 0 && (
-          <section style={{ marginBottom: '4rem' }}>
-            <SectionHeader title="Pending Organizations" subtitle={`${pendingOrgs.length} organization${pendingOrgs.length !== 1 ? 's' : ''} awaiting approval`} />
+        <section style={{ marginBottom: '4rem' }}>
+          <SectionHeader
+            title="Pending Organizations"
+            subtitle={pendingOrgs.length > 0
+              ? `${pendingOrgs.length} organization${pendingOrgs.length !== 1 ? 's' : ''} awaiting approval`
+              : 'No pending organization applications'}
+          />
+          {pendingOrgs.length === 0 ? (
+            <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.75rem', padding: '2rem', textAlign: 'center' }}>
+              <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No organizations are currently awaiting approval.</p>
+            </div>
+          ) : (
             <div style={{ border: '1px solid #E0E0DC', borderRadius: '0.75rem', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -486,8 +499,8 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* ──────────────────────────────────────────────────
             SECTION 1: MANAGE POSTS

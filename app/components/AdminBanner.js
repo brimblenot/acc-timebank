@@ -19,7 +19,7 @@ export default function AdminBanner() {
     check()
   }, [])
 
-  // Only show on authenticated member pages — not on admin, login, signup, suspended
+  // Only show on member-facing pages — not on admin, login, signup, suspended
   const hidden =
     !isAdmin ||
     !pathname ||
@@ -31,35 +31,40 @@ export default function AdminBanner() {
   if (hidden) return null
 
   return (
-    <button
-      onClick={() => router.push('/admin')}
-      title="Go to Admin Panel"
-      className="fab-admin"
-      style={{
-        position: 'fixed',
-        bottom: '5rem',
-        right: '1.5rem',
-        zIndex: 200,
-        backgroundColor: '#237371',
-        color: '#FEFFFF',
-        fontWeight: 700,
-        fontSize: '0.78rem',
-        padding: '0.55rem 1rem',
-        borderRadius: '9999px',
-        border: 'none',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.45rem',
-        boxShadow: '0 4px 16px rgba(35,115,113,0.4)',
-        letterSpacing: '0.01em',
-        userSelect: 'none',
-      }}
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
-        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
-      </svg>
-      Admin Panel
-    </button>
+    <div style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+      width: '100%',
+      backgroundColor: '#237371',
+      color: '#FEFFFF',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 2.5rem',
+      height: '36px',
+      fontSize: '0.78rem',
+      fontWeight: 600,
+      boxSizing: 'border-box',
+      flexShrink: 0,
+    }}>
+      <span style={{ opacity: 0.9, letterSpacing: '0.01em' }}>You are viewing member mode</span>
+      <button
+        onClick={() => router.push('/admin')}
+        style={{
+          backgroundColor: 'rgba(255,255,255,0.18)',
+          color: '#FEFFFF',
+          fontWeight: 700,
+          fontSize: '0.75rem',
+          padding: '0.2rem 0.75rem',
+          borderRadius: '0.35rem',
+          border: '1px solid rgba(255,255,255,0.35)',
+          cursor: 'pointer',
+          letterSpacing: '0.01em',
+        }}
+      >
+        Admin Panel →
+      </button>
+    </div>
   )
 }
