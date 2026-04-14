@@ -50,7 +50,7 @@ export default function ProfilePage() {
       setIsOwnProfile(user.id === id)
 
       const [profileRes, viewerRes] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url, vacation_mode, show_compliments').eq('id', id).single(),
+        supabase.from('profiles').select('id, full_name, username, bio, skills, avatar_url, vacation_mode, show_compliments, account_type').eq('id', id).single(),
         supabase.from('profiles').select('hour_balance').eq('id', user.id).single(),
       ])
 
@@ -89,8 +89,10 @@ export default function ProfilePage() {
     const { error } = await supabase.from('profiles').update({
       full_name: editData.full_name,
       bio: editData.bio,
-      skills: editData.skills,
-      vacation_mode: editData.vacation_mode,
+      ...(profile?.account_type !== 'organization' ? {
+        skills: editData.skills,
+        vacation_mode: editData.vacation_mode,
+      } : {}),
       show_compliments: editData.show_compliments,
     }).eq('id', id)
     if (!error) {
@@ -217,6 +219,7 @@ export default function ProfilePage() {
   const displayName = profile.full_name || profile.username
   const initials = displayName?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
   const showCompliments = profile.show_compliments !== false
+  const isOrgProfile = profile.account_type === 'organization'
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', color: '#2A272A' }}>
@@ -278,31 +281,35 @@ export default function ProfilePage() {
                     style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.6rem 0.875rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
                   />
                 </div>
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Skills I can offer</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    {SKILLS.map(skill => (
-                      <button
-                        key={skill}
-                        type="button"
-                        onClick={() => toggleEditSkill(skill)}
-                        style={{ padding: '0.3rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: editData.skills.includes(skill) ? '#237371' : '#F5F5F3', color: editData.skills.includes(skill) ? '#FEFFFF' : '#2A272A' }}
-                      >
-                        {skill}
-                      </button>
-                    ))}
+                {!isOrgProfile && (
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Skills I can offer</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {SKILLS.map(skill => (
+                        <button
+                          key={skill}
+                          type="button"
+                          onClick={() => toggleEditSkill(skill)}
+                          style={{ padding: '0.3rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: editData.skills.includes(skill) ? '#237371' : '#F5F5F3', color: editData.skills.includes(skill) ? '#FEFFFF' : '#2A272A' }}
+                        >
+                          {skill}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Availability</label>
-                  <button
-                    type="button"
-                    onClick={() => setEditData(prev => ({ ...prev, vacation_mode: !prev.vacation_mode }))}
-                    style={{ padding: '0.4rem 1rem', borderRadius: '9999px', border: '1px solid', borderColor: editData.vacation_mode ? '#D4A017' : '#E0E0DC', backgroundColor: editData.vacation_mode ? '#FEF9E7' : '#F5F5F3', color: editData.vacation_mode ? '#D4A017' : '#94B7A2', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
-                  >
-                    {editData.vacation_mode ? '🌴 On Vacation' : '✓ Available'}
-                  </button>
-                </div>
+                )}
+                {!isOrgProfile && (
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Availability</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditData(prev => ({ ...prev, vacation_mode: !prev.vacation_mode }))}
+                      style={{ padding: '0.4rem 1rem', borderRadius: '9999px', border: '1px solid', borderColor: editData.vacation_mode ? '#D4A017' : '#E0E0DC', backgroundColor: editData.vacation_mode ? '#FEF9E7' : '#F5F5F3', color: editData.vacation_mode ? '#D4A017' : '#94B7A2', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                    >
+                      {editData.vacation_mode ? '🌴 On Vacation' : '✓ Available'}
+                    </button>
+                  </div>
+                )}
                 <div>
                   <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94B7A2', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Compliments</label>
                   <button
@@ -333,7 +340,7 @@ export default function ProfilePage() {
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 700, marginBottom: '0.15rem' }}>{displayName}</h1>
-                  {profile.vacation_mode && (
+                  {!isOrgProfile && profile.vacation_mode && (
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '9999px', backgroundColor: '#FEF9E7', color: '#D4A017', border: '1px solid #D4A017' }}>🌴 On Vacation</span>
                   )}
                 </div>
@@ -355,7 +362,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Skills */}
-        {!editing && (profile.skills || []).length > 0 && (
+        {!editing && !isOrgProfile && (profile.skills || []).length > 0 && (
           <div style={{ marginBottom: '2rem' }}>
             <p style={{ fontSize: '0.7rem', color: '#94B7A2', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Skills Offered</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -383,7 +390,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Actions for other profiles */}
-        {!isOwnProfile && (
+        {!isOwnProfile && !isOrgProfile && (
           <div style={{ marginBottom: '2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button
               onClick={() => { setDonateModal(true); setDonateSuccess(false); setDonateError(null) }}

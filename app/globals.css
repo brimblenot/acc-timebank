@@ -23,6 +23,11 @@
   border-radius: 3px;
 }
 
+/* Prevent horizontal overflow at page level */
+body {
+  overflow-x: hidden;
+}
+
 /* Accessibility — font scaling via html font-size (affects all rem values) */
 html.text-large { font-size: 112% !important; }
 html.text-xl    { font-size: 125% !important; }
@@ -30,35 +35,127 @@ html.text-xl    { font-size: 125% !important; }
 /* Accessibility — high contrast via CSS filter */
 html.high-contrast { filter: contrast(1.55); }
 
-/* ─── Mobile Responsiveness ─────────────────────────────────── */
-
-/* Nav bar padding on small screens */
-@media (max-width: 768px) {
-  nav {
-    padding: 0.75rem 1rem !important;
-  }
-}
-
-/* NavLinks: wrap and shrink on mobile */
+/* ─── Desktop NavLinks ───────────────────────────────────── */
 .nav-links {
   display: flex;
   gap: 1.5rem;
   align-items: center;
   flex-wrap: nowrap;
 }
+
+/* ─── Hamburger button: hidden on desktop ────────────────── */
+.nav-hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem;
+  color: #2A272A;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Mobile nav (<= 768px) ──────────────────────────────── */
 @media (max-width: 768px) {
-  .nav-links {
-    gap: 0.6rem !important;
-    flex-wrap: wrap !important;
-    justify-content: flex-end;
+  nav {
+    padding: 0.75rem 1rem !important;
   }
-  .nav-links a,
-  .nav-links button {
-    font-size: 0.75rem !important;
+
+  /* Hide desktop links, show hamburger */
+  .nav-links {
+    display: none !important;
+  }
+  .nav-hamburger-btn {
+    display: flex !important;
   }
 }
 
-/* Content containers — ensure they don't overflow on mobile */
+/* ─── Mobile slide-out menu ──────────────────────────────── */
+.nav-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+}
+.nav-mobile-backdrop {
+  flex: 1;
+  background: rgba(42,39,42,0.45);
+}
+.nav-mobile-panel {
+  background: #FEFFFF;
+  width: 260px;
+  max-width: 82vw;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: -4px 0 24px rgba(42,39,42,0.14);
+  border-left: 1px solid #E0E0DC;
+}
+.nav-mobile-panel a,
+.nav-mobile-panel button.nav-mobile-link {
+  display: flex !important;
+  align-items: center;
+  padding: 0.9rem 1.25rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+  color: #2A272A !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid #F5F5F3 !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-radius: 0 !important;
+  background: none !important;
+  min-height: 52px;
+  box-sizing: border-box;
+  cursor: pointer;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-nunito);
+}
+
+/* ─── Messages page mobile ───────────────────────────────── */
+.msg-bubble {
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .msg-page {
+    /* Use dynamic viewport height so the input bar stays above the browser chrome */
+    height: 100dvh !important;
+    min-height: unset !important;
+  }
+  .msg-thread {
+    padding: 0.75rem 1rem !important;
+  }
+  .msg-header-bar {
+    padding: 0.75rem 1rem !important;
+  }
+  .msg-input-bar {
+    padding: 0.6rem 0.75rem !important;
+  }
+  .msg-input {
+    font-size: 16px !important; /* prevent iOS auto-zoom */
+    min-height: 48px !important;
+    padding: 0.5rem 0.875rem !important;
+  }
+  .msg-send-btn {
+    min-height: 48px !important;
+    min-width: 60px !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    font-size: 0.875rem !important;
+  }
+  .msg-bubble {
+    font-size: 15px !important;
+    max-width: 82vw !important;
+    line-height: 1.55 !important;
+  }
+}
+
+/* ─── Content containers — ensure they don't overflow on mobile ─── */
 @media (max-width: 640px) {
   /* Tables inside cards become horizontally scrollable */
   .table-scroll {
@@ -90,12 +187,19 @@ html.high-contrast { filter: contrast(1.55); }
   }
 }
 
-/* Floating action buttons: keep them above page footer tap zone */
+/* ─── Narrow screen overflow fixes (< 390px) ────────────── */
 @media (max-width: 480px) {
+  /* Floating message button */
   .fab-messages {
     bottom: 1rem !important;
     right: 1rem !important;
     width: 48px !important;
     height: 48px !important;
+  }
+
+  /* Reduce outer padding on very small screens */
+  main > div {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
   }
 }

@@ -27,6 +27,7 @@ export default function OrgDashboard() {
   const [org, setOrg] = useState(null)
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingCompliments, setSavingCompliments] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -35,7 +36,7 @@ export default function OrgDashboard() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, username, bio, avatar_url, account_type, org_status')
+        .select('id, full_name, username, bio, avatar_url, account_type, org_status, show_compliments')
         .eq('id', user.id)
         .single()
 
@@ -56,6 +57,15 @@ export default function OrgDashboard() {
     }
     init()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleCompliments = async () => {
+    if (savingCompliments) return
+    setSavingCompliments(true)
+    const newVal = org.show_compliments === false ? true : false
+    const { error } = await supabase.from('profiles').update({ show_compliments: newVal }).eq('id', org.id)
+    if (!error) setOrg(prev => ({ ...prev, show_compliments: newVal }))
+    setSavingCompliments(false)
+  }
 
   if (loading) return (
     <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -144,6 +154,24 @@ export default function OrgDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Profile Settings */}
+        <section style={{ marginBottom: '2.5rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '1.25rem' }}>Profile Settings</h2>
+          <div style={{ backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.2rem' }}>Show Compliments on Profile</p>
+              <p style={{ color: '#94B7A2', fontSize: '0.8rem' }}>Allow members to see compliments left for your organization.</p>
+            </div>
+            <button
+              onClick={handleToggleCompliments}
+              disabled={savingCompliments}
+              style={{ padding: '0.5rem 1.25rem', borderRadius: '9999px', border: '1px solid', borderColor: org.show_compliments !== false ? '#237371' : '#E0E0DC', backgroundColor: org.show_compliments !== false ? '#EBF5F0' : '#F5F5F3', color: org.show_compliments !== false ? '#237371' : '#94B7A2', fontWeight: 700, fontSize: '0.8rem', cursor: savingCompliments ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+            >
+              {org.show_compliments !== false ? '✓ Visible' : '✕ Hidden'}
+            </button>
+          </div>
+        </section>
 
         {/* Active Events */}
         <section style={{ marginBottom: '3rem' }}>
