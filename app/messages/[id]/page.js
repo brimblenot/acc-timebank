@@ -18,13 +18,15 @@ export default function MessageThread() {
   const [sending, setSending] = useState(false)
   const [isEnded, setIsEnded] = useState(false)
   // Leave-chat modal
+  const [isCancelled, setIsCancelled] = useState(false)
   const [leaveModal, setLeaveModal] = useState(false)
   const [leaving, setLeaving] = useState(false)
   // Hour-request modal
   const [hourModal, setHourModal] = useState(false)
   const [hourAmount, setHourAmount] = useState('')
   const [hourSubmitting, setHourSubmitting] = useState(false)
-  const [approving, setApproving] = useState(null)
+  const [approving, setApproving] = useState(null)   // ID of message being approved
+  const [declining, setDeclining] = useState(null)   // ID of message being declined
   const [hourError, setHourError] = useState(null)
   const bottomRef = useRef(null)
   const messagesRef = useRef([])
@@ -50,8 +52,16 @@ export default function MessageThread() {
         .eq('id', id)
         .single()
 
-      if (!app || app.status !== 'approved') { router.push('/dashboard'); return }
+      if (!app) { router.push('/dashboard'); return }
+      if (app.status === 'cancelled') {
+        setIsCancelled(true)
+        setLoading(false)
+        return
+      }
+      if (app.status !== 'approved') { router.push('/dashboard'); return }
       setApplication(app)
+
+      await supabase.rpc('mark_messages_read', { p_application_id: id }).catch(() => {})
 
       const { data: initialMessages } = await supabase
         .from('messages')
@@ -105,40 +115,12 @@ export default function MessageThread() {
     if (leaving) return
     setLeaving(true)
 
-    const isUserApplicant = currentUser.id === application.profiles?.id
-    const myProfile = isUserApplicant ? application.profiles : application.service_posts.profiles
-    const name = myProfile?.full_name || myProfile?.username || 'Someone'
-    const postId = application.service_posts.id
-
-    // 1. Cancel this application
-    await supabase.from('applications').update({ status: 'cancelled' }).eq('id', id)
+    const isUserApplicant = currentUser.id === application.applicant_id
 
     if (isUserApplicant) {
-      // Applicant leaves: reopen post so a new applicant can be found
-      await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
-      // Decline any other pending applications so the post starts fresh
-      await supabase
-        .from('applications')
-        .update({ status: 'declined' })
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-        .neq('id', id)
-      // Leave-type system message (sender_id set → marks conversation as ended)
-      await supabase.from('messages').insert({
-        application_id: id,
-        sender_id: currentUser.id,
-        content: `${name} has left this exchange. The post has been reopened for new applicants.`,
-        is_system: true,
-      })
+      await supabase.rpc('cancel_exchange_as_applicant', { p_application_id: id })
     } else {
-      // Poster leaves: close the post entirely — they are withdrawing it
-      await supabase.from('service_posts').update({ status: 'cancelled' }).eq('id', postId)
-      await supabase.from('messages').insert({
-        application_id: id,
-        sender_id: currentUser.id,
-        content: `${name} has cancelled this exchange and closed the post.`,
-        is_system: true,
-      })
+      await supabase.rpc('cancel_exchange_as_poster', { p_application_id: id })
     }
 
     setLeaving(false)
@@ -176,7 +158,7 @@ export default function MessageThread() {
   }
 
   const handleApproveHours = async (msg) => {
-    if (approving) return
+    if (approving || declining) return
     setHourError(null)
     setApproving(msg.id)
 
@@ -210,15 +192,23 @@ export default function MessageThread() {
     await supabase.from('service_posts').update({ hours_required: newHours }).eq('id', application.service_posts.id)
     setApplication(prev => ({ ...prev, service_posts: { ...prev.service_posts, hours_required: newHours } }))
 
-    // Mark request approved so it cannot be approved again
-    await supabase.from('messages').update({ hour_request_status: 'approved' }).eq('id', msg.id)
+    // Mark request approved — log the response to surface any RLS block
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ hour_request_status: 'approved' })
+      .eq('id', msg.id)
+    if (updateError) {
+      console.error('Failed to persist hour request approval:', updateError)
+      setHourError('Failed to save approval. Please try again.')
+      setApproving(null)
+      return
+    }
 
     // Insert automated system message (sender_id = null → does NOT end conversation)
-    const applicantName = application.profiles?.full_name || application.profiles?.username || 'the applicant'
     await supabase.from('messages').insert({
       application_id: id,
       sender_id: null,
-      content: `✓ ${msg.hour_request_amount} additional hour${msg.hour_request_amount !== 1 ? 's' : ''} approved and transferred. Thank you for your service.`,
+      content: `✓ Your request for ${msg.hour_request_amount} additional hour${msg.hour_request_amount !== 1 ? 's' : ''} was approved. The exchange is now ${newHours} hour${newHours !== 1 ? 's' : ''} total.`,
       is_system: true,
     })
 
@@ -229,9 +219,9 @@ export default function MessageThread() {
   }
 
   const handleDeclineHours = async (msg) => {
-    if (approving) return
+    if (approving || declining) return
     setHourError(null)
-    setApproving(msg.id)
+    setDeclining(msg.id)
 
     // Guard: re-fetch to confirm still pending
     const { data: fresh } = await supabase
@@ -240,11 +230,20 @@ export default function MessageThread() {
       .eq('id', msg.id)
       .single()
     if (fresh?.hour_request_status !== 'pending') {
-      setApproving(null)
+      setDeclining(null)
       return
     }
 
-    await supabase.from('messages').update({ hour_request_status: 'declined' }).eq('id', msg.id)
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ hour_request_status: 'declined' })
+      .eq('id', msg.id)
+    if (updateError) {
+      console.error('Failed to persist hour request decline:', updateError)
+      setHourError('Failed to save decline. Please try again.')
+      setDeclining(null)
+      return
+    }
 
     await supabase.from('messages').insert({
       application_id: id,
@@ -256,8 +255,21 @@ export default function MessageThread() {
     // Remove request card from UI immediately
     messagesRef.current = messagesRef.current.filter(m => m.id !== msg.id)
     setMessages([...messagesRef.current])
-    setApproving(null)
+    setDeclining(null)
   }
+
+  // ─── Cancelled ───────────────────────────────────────────────────────────────
+  if (isCancelled) return (
+    <main style={{ minHeight: '100vh', backgroundColor: '#FEFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+      <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, color: '#2A272A', marginBottom: '0.5rem' }}>
+        This conversation is no longer available.
+      </p>
+      <p style={{ color: '#94B7A2', marginBottom: '1.5rem' }}>This exchange was cancelled.</p>
+      <Link href="/dashboard" style={{ backgroundColor: '#237371', color: '#FEFFFF', fontWeight: 700, padding: '0.75rem 1.5rem', borderRadius: '0.75rem', textDecoration: 'none', fontSize: '0.875rem' }}>
+        Back to Dashboard
+      </Link>
+    </main>
+  )
 
   // ─── Loading ─────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -271,7 +283,7 @@ export default function MessageThread() {
     : application.service_posts.profiles
 
   // Only the applicant (person who applied and was accepted) sees the request button.
-  const isApplicant = currentUser?.id === application.profiles?.id
+  const isApplicant = currentUser?.id === application.applicant_id
 
   // Disable the request button if there is already a pending request in this thread.
   // Since filterMessages strips non-pending ones, any is_hour_request in state is pending.
@@ -371,7 +383,9 @@ export default function MessageThread() {
           if (msg.is_hour_request) {
             if (msg.hour_request_status !== 'pending') return null
             const isRequester = msg.sender_id === currentUser?.id
-            const isActioning = approving === msg.id
+            const isApproving = approving === msg.id
+            const isDeclining = declining === msg.id
+            const isActioning = isApproving || isDeclining
             return (
               <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem 0' }}>
                 <div style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1rem 1.5rem', maxWidth: '360px', textAlign: 'center', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}>
@@ -383,14 +397,14 @@ export default function MessageThread() {
                         disabled={isActioning}
                         style={{ padding: '0.4rem 1rem', backgroundColor: isActioning ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                       >
-                        {isActioning ? 'Approving…' : 'Approve'}
+                        {isApproving ? 'Approving…' : 'Approve'}
                       </button>
                       <button
                         onClick={() => handleDeclineHours(msg)}
                         disabled={isActioning}
-                        style={{ padding: '0.4rem 1rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                        style={{ padding: '0.4rem 1rem', backgroundColor: '#F5F5F3', color: isActioning ? '#94B7A2' : '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                       >
-                        Decline
+                        {isDeclining ? 'Declining…' : 'Decline'}
                       </button>
                     </div>
                   )}
@@ -475,9 +489,13 @@ export default function MessageThread() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
           <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.45)' }} onClick={() => !leaving && setLeaveModal(false)} />
           <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '400px', boxShadow: '0 8px 40px rgba(42,39,42,0.15)', border: '1px solid #E0E0DC' }}>
-            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#2A272A' }}>Leave this exchange?</h2>
+            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#2A272A' }}>
+              {isApplicant ? 'Leave this exchange?' : 'Cancel this exchange?'}
+            </h2>
             <p style={{ color: '#2A272A', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '0.5rem' }}>
-              This will <strong>cancel the exchange</strong> and reopen the post so the other person can find a new match.
+              {isApplicant
+                ? 'Are you sure you want to leave this exchange? The post will be reopened so the requester can find a new match.'
+                : 'Are you sure you want to cancel this exchange? The post will be permanently closed.'}
             </p>
             <p style={{ color: '#c0392b', fontSize: '0.8rem', marginBottom: '1.5rem' }}>
               This cannot be undone.
@@ -488,7 +506,7 @@ export default function MessageThread() {
                 disabled={leaving}
                 style={{ flex: 1, padding: '0.875rem', backgroundColor: leaving ? '#E0E0DC' : '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: leaving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
               >
-                {leaving ? 'Leaving…' : 'Yes, leave and cancel'}
+                {leaving ? 'Processing…' : isApplicant ? 'Yes, leave exchange' : 'Yes, cancel exchange'}
               </button>
               <button
                 onClick={() => setLeaveModal(false)}

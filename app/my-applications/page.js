@@ -78,27 +78,11 @@ export default function MyApplications() {
   }
 
   // Cancel an approved/in-progress exchange (applicant is always the one using this page)
-  const handleCancelExchange = async (applicationId, postId) => {
+  const handleCancelExchange = async (applicationId) => {
     setCancellingExchange(applicationId)
-    // Cancel this application
-    await supabase.from('applications').update({ status: 'cancelled' }).eq('id', applicationId)
-    // Reopen the post so a new applicant can be found
-    await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
-    // Decline any other pending applications so the post starts fresh
-    await supabase
-      .from('applications')
-      .update({ status: 'declined' })
-      .eq('post_id', postId)
-      .eq('status', 'pending')
-      .neq('id', applicationId)
-    // Insert a system message in the conversation thread
-    await supabase.from('messages').insert({
-      application_id: applicationId,
-      sender_id: currentUserId,
-      content: `${currentUserName} has left this exchange. The post has been reopened for new applicants.`,
-      is_system: true,
-    })
-    await fetchApplications(currentUserId)
+    const { error } = await supabase.rpc('cancel_exchange_as_applicant', { p_application_id: applicationId })
+    // Remove from view on success — applicant self-cancel leaves no trace
+    if (!error) setApplications(prev => prev.filter(a => a.id !== applicationId))
     setCancellingExchange(null)
   }
 
@@ -187,7 +171,14 @@ export default function MyApplications() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {applications.map(app => {
+            {applications.filter(app => {
+              // Cancelled applications are fully removed from view regardless of who
+              // cancelled — applicant-cancelled means the post reopened (no trace in
+              // their applications list), poster-cancelled means the applicant gets a
+              // notification but the row is gone too.
+              if (app.status === 'cancelled') return false
+              return true
+            }).map(app => {
               const postStatus = getPostStatus(app)
               const isCompleted = postStatus === 'completed'
               const isCancelled = postStatus === 'cancelled'
@@ -263,6 +254,13 @@ export default function MyApplications() {
                     </div>
                   )}
 
+                  {/* Poster cancelled notice */}
+                  {isCancelled && app.service_posts?.status === 'cancelled' && (
+                    <div style={{ backgroundColor: '#fdf0ef', border: '1px solid #f5c6c2', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#c0392b', fontWeight: 600 }}>
+                      {app.service_posts?.profiles?.full_name || app.service_posts?.profiles?.username || 'The requester'} cancelled this exchange.
+                    </div>
+                  )}
+
                   {/* Someone else accepted notice */}
                   {postStatus === 'someone_else_accepted' && (
                     <div style={{ backgroundColor: '#FEF9E7', border: '1px solid #D4A017', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#D4A017', fontWeight: 600 }}>
@@ -294,7 +292,7 @@ export default function MyApplications() {
                             💬 Messages
                           </Link>
                           <button
-                            onClick={() => handleCancelExchange(app.id, app.service_posts?.id)}
+                            onClick={() => handleCancelExchange(app.id)}
                             disabled={cancellingExchange === app.id}
                             style={{ padding: '0.5rem 1.25rem', backgroundColor: 'transparent', color: '#c0392b', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #f5c6c2', cursor: cancellingExchange === app.id ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
                           >

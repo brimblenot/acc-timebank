@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ activePosts: 0, servicesGiven: 0, servicesReceived: 0 })
 
-  const { openMessages, conversations, totalUnread } = useMessages()
+  const { openMessagesNavigate, conversations, totalUnread } = useMessages()
 
   useEffect(() => {
     const getProfile = async () => {
@@ -140,7 +140,7 @@ export default function Dashboard() {
             </Link>
           ))}
           <button
-            onClick={openMessages}
+            onClick={openMessagesNavigate}
             style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1.25rem', textAlign: 'left', cursor: 'pointer', boxShadow: '0 2px 8px rgba(42,39,42,0.06)', position: 'relative' }}
           >
             {totalUnread > 0 && (

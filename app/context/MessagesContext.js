@@ -18,8 +18,10 @@ export function MessagesProvider({ children }) {
   const [endedConvos, setEndedConvos] = useState({})
   const [pendingApplicantCount, setPendingApplicantCount] = useState(0)
   const [newApprovalCount, setNewApprovalCount] = useState(0)
-  const [approving, setApproving] = useState(null)
+  const [approving, setApproving] = useState(null)   // ID of message being approved
+  const [declining, setDeclining] = useState(null)   // ID of message being declined
   const [hourError, setHourError] = useState(null)
+  const [navigateMode, setNavigateMode] = useState(false)
   const messagesRef = useRef([])
   const channelRef = useRef(null)
   const badgeChannelRef = useRef(null)
@@ -70,7 +72,12 @@ export function MessagesProvider({ children }) {
     if (badgeChannelRef.current) supabase.removeChannel(badgeChannelRef.current)
     const ch = supabase
       .channel('badge-counts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => fetchBadgeCounts(uid))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => {
+        fetchBadgeCounts(uid)
+        // Refetch conversations too so a cancelled exchange disappears from
+        // both parties' lists immediately, not just on next manual refresh.
+        fetchConversations(uid)
+      })
       .subscribe()
     badgeChannelRef.current = ch
   }
@@ -158,41 +165,90 @@ export function MessagesProvider({ children }) {
         hours_required: a.service_posts?.hours_required,
       })),
     ]
-    setConversations(all)
 
-    if (!all.length) return
+    if (!all.length) {
+      setConversations([])
+      return
+    }
+
+    const appIds = all.map(c => c.id)
+    let counts = {}
+    let lastMsgTime = {}
+
+    // Last message timestamp per conversation (for sort)
+    const { data: lastMsgs } = await supabase
+      .from('messages')
+      .select('application_id, created_at')
+      .in('application_id', appIds)
+      .order('created_at', { ascending: false })
+
+    for (const m of (lastMsgs || [])) {
+      if (!lastMsgTime[m.application_id]) lastMsgTime[m.application_id] = m.created_at
+    }
+
+    // Unread counts via is_read column; fall back to conversation_reads watermark
     try {
-      const appIds = all.map(c => c.id)
-
-      const { data: reads, error } = await supabase
-        .from('conversation_reads')
-        .select('application_id, last_read_at')
-        .eq('user_id', uid)
-        .in('application_id', appIds)
-
-      if (error) return
-
-      const readsMap = {}
-      reads?.forEach(r => { readsMap[r.application_id] = r.last_read_at })
-
-      const { data: msgs } = await supabase
+      const { data: unreadMsgs } = await supabase
         .from('messages')
-        .select('application_id, created_at, sender_id')
+        .select('application_id')
         .in('application_id', appIds)
+        .eq('is_read', false)
+        .eq('is_system', false)
         .neq('sender_id', uid)
 
-      const counts = {}
-      msgs?.forEach(m => {
-        const lastRead = readsMap[m.application_id]
-        if (!lastRead || new Date(m.created_at) > new Date(lastRead)) {
-          counts[m.application_id] = (counts[m.application_id] || 0) + 1
-        }
+      unreadMsgs?.forEach(m => {
+        counts[m.application_id] = (counts[m.application_id] || 0) + 1
       })
-      setUnreadMap(counts)
-    } catch { /* conversation_reads table may not exist yet */ }
+    } catch {
+      try {
+        const { data: reads } = await supabase
+          .from('conversation_reads')
+          .select('application_id, last_read_at')
+          .eq('user_id', uid)
+          .in('application_id', appIds)
+
+        const readsMap = {}
+        reads?.forEach(r => { readsMap[r.application_id] = r.last_read_at })
+
+        const { data: msgs } = await supabase
+          .from('messages')
+          .select('application_id, created_at, sender_id')
+          .in('application_id', appIds)
+          .neq('sender_id', uid)
+
+        msgs?.forEach(m => {
+          const lastRead = readsMap[m.application_id]
+          if (!lastRead || new Date(m.created_at) > new Date(lastRead)) {
+            counts[m.application_id] = (counts[m.application_id] || 0) + 1
+          }
+        })
+      } catch { }
+    }
+
+    setUnreadMap(counts)
+
+    // Sort: unread first (by last message desc), then read (by last message desc)
+    const sorted = [...all].sort((a, b) => {
+      const aU = (counts[a.id] || 0) > 0
+      const bU = (counts[b.id] || 0) > 0
+      if (aU !== bU) return aU ? -1 : 1
+      const at = lastMsgTime[a.id] || ''
+      const bt = lastMsgTime[b.id] || ''
+      return bt > at ? 1 : bt < at ? -1 : 0
+    })
+    setConversations(sorted)
   }
 
-  const openMessages = useCallback(() => setIsOpen(true), [])
+  const openMessages = useCallback(() => {
+    setNavigateMode(false)
+    setIsOpen(true)
+  }, [])
+
+  const openMessagesNavigate = useCallback(() => {
+    setNavigateMode(true)
+    setIsOpen(true)
+  }, [])
+
   const closeMessages = useCallback(() => {
     setIsOpen(false)
     setActiveConvo(null)
@@ -209,9 +265,7 @@ export function MessagesProvider({ children }) {
 
     if (userId) {
       try {
-        await supabase
-          .from('conversation_reads')
-          .upsert({ user_id: userId, application_id: convo.id, last_read_at: new Date().toISOString() })
+        await supabase.rpc('mark_messages_read', { p_application_id: convo.id })
         fetchBadgeCounts(userId)
       } catch { }
     }
@@ -271,42 +325,15 @@ export function MessagesProvider({ children }) {
     channelRef.current = channel
   }
 
-  // Full exchange cancellation — distinguishes poster vs applicant.
+  // Full exchange cancellation — routes to the correct RPC based on who is leaving.
   const leaveConversation = async (convo) => {
     if (!userId || !convo) return
     const isUserApplicant = userId === convo.applicant_id
-    const myName = userDisplayName || 'Someone'
-    const postId = convo.post_id
-
-    // 1. Cancel application
-    await supabase.from('applications').update({ status: 'cancelled' }).eq('id', convo.id)
-
     if (isUserApplicant) {
-      // Applicant leaves: reopen post, decline other pending apps
-      await supabase.from('service_posts').update({ status: 'open' }).eq('id', postId)
-      await supabase
-        .from('applications')
-        .update({ status: 'declined' })
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-        .neq('id', convo.id)
-      await supabase.from('messages').insert({
-        application_id: convo.id,
-        sender_id: userId,
-        content: `${myName} has left this exchange. The post has been reopened for new applicants.`,
-        is_system: true,
-      })
+      await supabase.rpc('cancel_exchange_as_applicant', { p_application_id: convo.id })
     } else {
-      // Poster leaves: close the post entirely
-      await supabase.from('service_posts').update({ status: 'cancelled' }).eq('id', postId)
-      await supabase.from('messages').insert({
-        application_id: convo.id,
-        sender_id: userId,
-        content: `${myName} has cancelled this exchange and closed the post.`,
-        is_system: true,
-      })
+      await supabase.rpc('cancel_exchange_as_poster', { p_application_id: convo.id })
     }
-
     setEndedConvos(prev => ({ ...prev, [convo.id]: true }))
     fetchConversations(userId)
   }
@@ -314,7 +341,7 @@ export function MessagesProvider({ children }) {
   // ── Hour request approval / decline ──────────────────────────────────────────
 
   const approveHours = async (msg) => {
-    if (approving || !activeConvo) return
+    if (approving || declining || !activeConvo) return
     setHourError(null)
     setApproving(msg.id)
 
@@ -353,14 +380,23 @@ export function MessagesProvider({ children }) {
     await supabase.from('service_posts').update({ hours_required: newHours }).eq('id', activeConvo.post_id)
     setActiveConvo(prev => prev ? { ...prev, hours_required: newHours } : prev)
 
-    // Mark request approved so it cannot be processed again
-    await supabase.from('messages').update({ hour_request_status: 'approved' }).eq('id', msg.id)
+    // Mark request approved — log the response to surface any RLS block
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ hour_request_status: 'approved' })
+      .eq('id', msg.id)
+    if (updateError) {
+      console.error('Failed to persist hour request approval:', updateError)
+      setHourError('Failed to save approval. Please try again.')
+      setApproving(null)
+      return
+    }
 
     // Insert automated system message (sender_id = null → does NOT end conversation)
     await supabase.from('messages').insert({
       application_id: activeConvo.id,
       sender_id: null,
-      content: `✓ ${msg.hour_request_amount} additional hour${msg.hour_request_amount !== 1 ? 's' : ''} approved and transferred. Thank you for your service.`,
+      content: `✓ Your request for ${msg.hour_request_amount} additional hour${msg.hour_request_amount !== 1 ? 's' : ''} was approved. The exchange is now ${newHours} hour${newHours !== 1 ? 's' : ''} total.`,
       is_system: true,
     })
 
@@ -371,9 +407,9 @@ export function MessagesProvider({ children }) {
   }
 
   const declineHours = async (msg) => {
-    if (approving || !activeConvo) return
+    if (approving || declining || !activeConvo) return
     setHourError(null)
-    setApproving(msg.id)
+    setDeclining(msg.id)
 
     const { data: fresh } = await supabase
       .from('messages')
@@ -381,11 +417,20 @@ export function MessagesProvider({ children }) {
       .eq('id', msg.id)
       .single()
     if (fresh?.hour_request_status !== 'pending') {
-      setApproving(null)
+      setDeclining(null)
       return
     }
 
-    await supabase.from('messages').update({ hour_request_status: 'declined' }).eq('id', msg.id)
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ hour_request_status: 'declined' })
+      .eq('id', msg.id)
+    if (updateError) {
+      console.error('Failed to persist hour request decline:', updateError)
+      setHourError('Failed to save decline. Please try again.')
+      setDeclining(null)
+      return
+    }
 
     await supabase.from('messages').insert({
       application_id: activeConvo.id,
@@ -396,7 +441,21 @@ export function MessagesProvider({ children }) {
 
     messagesRef.current = messagesRef.current.filter(m => m.id !== msg.id)
     setMessages([...messagesRef.current])
-    setApproving(null)
+    setDeclining(null)
+  }
+
+  // Submit an hour request from the applicant's side (used by overlay and full page).
+  const submitHourRequest = async (amount) => {
+    if (!activeConvo || !userId) return false
+    const { error } = await supabase.from('messages').insert({
+      application_id: activeConvo.id,
+      sender_id: userId,
+      content: `${userDisplayName} is requesting ${amount} additional hour${amount !== 1 ? 's' : ''}.`,
+      is_hour_request: true,
+      hour_request_amount: amount,
+      hour_request_status: 'pending',
+    })
+    return !error
   }
 
   const handleSend = async (e) => {
@@ -416,6 +475,8 @@ export function MessagesProvider({ children }) {
       userId,
       isOpen,
       openMessages,
+      openMessagesNavigate,
+      navigateMode,
       closeMessages,
       conversations,
       activeConvo,
@@ -432,7 +493,9 @@ export function MessagesProvider({ children }) {
       approveHours,
       declineHours,
       approving,
+      declining,
       hourError,
+      submitHourRequest,
       refetchConversations: fetchConversations,
       pendingApplicantCount,
       newApprovalCount,

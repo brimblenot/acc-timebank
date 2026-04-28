@@ -206,13 +206,14 @@ export default function AdminPage() {
     }
     setSuspensions(suspensionsRes.data || [])
 
-    // Fetch pending organizations — guarded in case org_accounts.sql not yet applied
+    // Fetch pending organizations — guarded in case org_accounts.sql not yet applied.
+    // Sorted ascending so the oldest applications surface first and don't get left waiting.
     const { data: pendingOrgsData, error: pendingOrgsErr } = await supabase
       .from('profiles')
       .select('id, full_name, username, bio, created_at')
       .eq('account_type', 'organization')
       .eq('org_status', 'pending')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
     console.log('[admin] pendingOrgs fetch — data:', pendingOrgsData, '| error:', pendingOrgsErr?.message ?? null)
     if (pendingOrgsErr) {
       console.error('[admin] pendingOrgs error — has org_accounts.sql been run?', pendingOrgsErr.message)
@@ -494,56 +495,105 @@ export default function AdminPage() {
               <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>No organizations are currently awaiting approval.</p>
             </div>
           ) : (
-            <div style={{ border: '1px solid #E0E0DC', borderRadius: '0.75rem', overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Organization</th>
-                      <th style={thStyle}>Username</th>
-                      <th style={thStyle}>Description</th>
-                      <th style={thStyle}>Applied</th>
-                      <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingOrgs.map(org => (
-                      <tr key={org.id} style={{ backgroundColor: '#FEFFFF' }}>
-                        <td style={{ ...tdStyle, fontWeight: 600 }}>
-                          <Link href={`/profile/${org.id}`} target="_blank" style={{ color: '#2A272A', textDecoration: 'none' }}>
-                            {org.full_name || '—'}
-                          </Link>
-                        </td>
-                        <td style={{ ...tdStyle, color: '#94B7A2' }}>@{org.username || '—'}</td>
-                        <td style={{ ...tdStyle, color: '#94B7A2', maxWidth: '300px', fontSize: '0.8rem' }}>
-                          <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                            {org.bio || '—'}
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle, color: '#94B7A2', whiteSpace: 'nowrap' }}>{formatDate(org.created_at)}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => handleApproveOrg(org.id, org.full_name || org.username)}
-                              disabled={approvingOrg === org.id}
-                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #94B7A2', cursor: 'pointer', fontSize: '0.8rem' }}
-                            >
-                              {approvingOrg === org.id ? '…' : 'Approve'}
-                            </button>
-                            <button
-                              onClick={() => handleRejectOrg(org.id, org.full_name || org.username)}
-                              disabled={rejectingOrg === org.id}
-                              style={{ padding: '0.35rem 0.875rem', backgroundColor: '#fdf0ef', color: '#c0392b', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #f5c6c2', cursor: 'pointer', fontSize: '0.8rem' }}
-                            >
-                              {rejectingOrg === org.id ? '…' : 'Reject'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {pendingOrgs.map(org => {
+                const email = emailMap[org.id]
+                return (
+                  <div
+                    key={org.id}
+                    style={{
+                      backgroundColor: '#FEFFFF',
+                      border: '1px solid #E0E0DC',
+                      borderRadius: '0.75rem',
+                      padding: '1.75rem',
+                      boxShadow: '0 1px 2px rgba(42,39,42,0.03)',
+                    }}
+                  >
+                    {/* Heading: org name + @username */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <Link
+                        href={`/profile/${org.id}`}
+                        target="_blank"
+                        style={{
+                          fontFamily: 'var(--font-cormorant)',
+                          fontSize: '1.5rem',
+                          fontWeight: 700,
+                          color: '#2A272A',
+                          textDecoration: 'none',
+                          lineHeight: 1.2,
+                          display: 'inline-block',
+                        }}
+                      >
+                        {org.full_name || 'Unnamed organization'}
+                      </Link>
+                      <p style={{ color: '#94B7A2', fontSize: '0.875rem', margin: '0.15rem 0 0 0' }}>
+                        @{org.username || '—'}
+                      </p>
+                    </div>
+
+                    {/* Email + Applied date */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                      <div>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.2rem 0' }}>
+                          Email
+                        </p>
+                        {email ? (
+                          <a href={`mailto:${email}`} style={{ color: '#237371', textDecoration: 'none', fontWeight: 600 }}>
+                            {email}
+                          </a>
+                        ) : (
+                          <span style={{ color: '#94B7A2', fontStyle: 'italic' }}>Email unavailable</span>
+                        )}
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.2rem 0' }}>
+                          Applied
+                        </p>
+                        <span style={{ color: '#2A272A', fontWeight: 600 }}>
+                          Applied on {formatDate(org.created_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bio / description */}
+                    <div style={{ marginBottom: '1.25rem' }}>
+                      <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94B7A2', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.4rem 0' }}>
+                        Description
+                      </p>
+                      {org.bio?.trim() ? (
+                        <p style={{ color: '#2A272A', fontSize: '0.9rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {org.bio}
+                        </p>
+                      ) : (
+                        <p style={{ color: '#94B7A2', fontSize: '0.875rem', fontStyle: 'italic', margin: 0 }}>
+                          No description provided.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ borderTop: '1px solid #E0E0DC', margin: '0 -1.75rem 1.25rem' }} />
+
+                    {/* Approve / Reject */}
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => handleApproveOrg(org.id, org.full_name || org.username)}
+                        disabled={approvingOrg === org.id}
+                        style={{ padding: '0.5rem 1.25rem', backgroundColor: '#EBF5F0', color: '#237371', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #94B7A2', cursor: approvingOrg === org.id ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+                      >
+                        {approvingOrg === org.id ? '…' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => handleRejectOrg(org.id, org.full_name || org.username)}
+                        disabled={rejectingOrg === org.id}
+                        style={{ padding: '0.5rem 1.25rem', backgroundColor: '#fdf0ef', color: '#c0392b', fontWeight: 600, borderRadius: '0.4rem', border: '1px solid #f5c6c2', cursor: rejectingOrg === org.id ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+                      >
+                        {rejectingOrg === org.id ? '…' : 'Reject'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>

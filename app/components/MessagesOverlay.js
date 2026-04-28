@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMessages } from '../context/MessagesContext'
 
 export default function MessagesOverlay() {
@@ -22,13 +23,22 @@ export default function MessagesOverlay() {
     approveHours,
     declineHours,
     approving,
+    declining,
     hourError,
+    submitHourRequest,
+    navigateMode,
   } = useMessages()
+
+  const router = useRouter()
 
   const [leaveModal, setLeaveModal] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [mobileView, setMobileView] = useState('list') // 'list' | 'thread'
+  const [hourModal, setHourModal] = useState(false)
+  const [hourAmount, setHourAmount] = useState('')
+  const [hourSubmitting, setHourSubmitting] = useState(false)
+  const [overlayHourError, setOverlayHourError] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -48,7 +58,15 @@ export default function MessagesOverlay() {
 
   if (!isOpen) return null
 
+  const isApplicant = userId && activeConvo ? userId === activeConvo.applicant_id : false
+  const hasPendingHourRequest = messages.some(m => m.is_hour_request)
+
   const handleOpenConversation = (convo) => {
+    if (navigateMode) {
+      closeMessages()
+      router.push(`/messages/${convo.id}`)
+      return
+    }
     openConversation(convo)
     if (isMobile) setMobileView('thread')
   }
@@ -62,6 +80,21 @@ export default function MessagesOverlay() {
     setLeaving(false)
     setLeaveModal(false)
     if (isMobile) setMobileView('list')
+  }
+
+  const handleOverlayHourRequest = async () => {
+    const amount = parseInt(hourAmount)
+    if (!amount || amount <= 0) return
+    setHourSubmitting(true)
+    setOverlayHourError(null)
+    const success = await submitHourRequest(amount)
+    if (success) {
+      setHourModal(false)
+      setHourAmount('')
+    } else {
+      setOverlayHourError('Failed to send request. Please try again.')
+    }
+    setHourSubmitting(false)
   }
 
   const showList   = !isMobile || mobileView === 'list'
@@ -178,7 +211,8 @@ export default function MessagesOverlay() {
           ) : (
             <>
               {/* Thread header */}
-              <div style={{ padding: isMobile ? '0.875rem 1rem' : '1.25rem 1.5rem', borderBottom: '1px solid #E0E0DC', flexShrink: 0 }}>
+              <div style={{ padding: isMobile ? '0.875rem 1rem' : '1rem 1.5rem', borderBottom: '1px solid #E0E0DC', flexShrink: 0 }}>
+                {/* Row 1: back button + name + leave button */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : 0, justifyContent: isMobile ? 'flex-start' : 'space-between' }}>
                   {isMobile && (
                     <button
@@ -205,6 +239,25 @@ export default function MessagesOverlay() {
                     </button>
                   )}
                 </div>
+
+                {/* Row 2: Request Additional Hours (applicant only, when no pending request) */}
+                {!endedConvos[activeConvo.id] && isApplicant && (
+                  hasPendingHourRequest ? (
+                    <p style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#94B7A2', fontStyle: 'italic' }}>
+                      Hour request pending...
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94B7A2', fontStyle: 'italic' }}>Service took longer than expected?</span>
+                      <button
+                        onClick={() => { setHourModal(true); setHourAmount(''); setOverlayHourError(null) }}
+                        style={{ fontSize: '0.72rem', color: '#237371', backgroundColor: '#FEFFFF', border: '1.5px solid #237371', borderRadius: '0.4rem', padding: '0.2rem 0.625rem', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
+                      >
+                        Request Additional Hours
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
 
               {/* Messages */}
@@ -219,7 +272,9 @@ export default function MessagesOverlay() {
                   if (msg.is_hour_request) {
                     if (msg.hour_request_status !== 'pending') return null
                     const isRequester = msg.sender_id === userId
-                    const isActioning = approving === msg.id
+                    const isApproving = approving === msg.id
+                    const isDeclining = declining === msg.id
+                    const isActioning = isApproving || isDeclining
                     return (
                       <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem 0' }}>
                         <div style={{ backgroundColor: '#FEFFFF', border: '1px solid #E0E0DC', borderRadius: '1rem', padding: '1rem 1.25rem', maxWidth: '300px', width: '100%', textAlign: 'center', boxShadow: '0 2px 8px rgba(42,39,42,0.06)' }}>
@@ -231,14 +286,14 @@ export default function MessagesOverlay() {
                                 disabled={isActioning}
                                 style={{ padding: '0.35rem 0.875rem', backgroundColor: isActioning ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                               >
-                                {isActioning ? 'Approving…' : 'Approve'}
+                                {isApproving ? 'Approving…' : 'Approve'}
                               </button>
                               <button
                                 onClick={() => declineHours(msg)}
                                 disabled={isActioning}
-                                style={{ padding: '0.35rem 0.875rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                                style={{ padding: '0.35rem 0.875rem', backgroundColor: '#F5F5F3', color: isActioning ? '#94B7A2' : '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: isActioning ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
                               >
-                                Decline
+                                {isDeclining ? 'Declining…' : 'Decline'}
                               </button>
                             </div>
                           )}
@@ -362,9 +417,13 @@ export default function MessagesOverlay() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
           <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.5)' }} onClick={() => !leaving && setLeaveModal(false)} />
           <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '380px', boxShadow: '0 8px 40px rgba(42,39,42,0.2)', border: '1px solid #E0E0DC' }}>
-            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#2A272A' }}>Leave this exchange?</h2>
+            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#2A272A' }}>
+              {isApplicant ? 'Leave this exchange?' : 'Cancel this exchange?'}
+            </h2>
             <p style={{ color: '#2A272A', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '0.4rem' }}>
-              This will <strong>cancel the exchange</strong> and update the post status.
+              {isApplicant
+                ? 'Are you sure you want to leave this exchange? The post will be reopened so the requester can find a new match.'
+                : 'Are you sure you want to cancel this exchange? The post will be permanently closed.'}
             </p>
             <p style={{ color: '#c0392b', fontSize: '0.8rem', marginBottom: '1.5rem' }}>This cannot be undone.</p>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -373,7 +432,7 @@ export default function MessagesOverlay() {
                 disabled={leaving}
                 style={{ flex: 1, padding: '0.875rem', backgroundColor: leaving ? '#E0E0DC' : '#c0392b', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: leaving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
               >
-                {leaving ? 'Leaving…' : 'Yes, leave and cancel'}
+                {leaving ? 'Processing…' : isApplicant ? 'Yes, leave exchange' : 'Yes, cancel exchange'}
               </button>
               <button
                 onClick={() => setLeaveModal(false)}
@@ -381,6 +440,50 @@ export default function MessagesOverlay() {
                 style={{ padding: '0.875rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: leaving ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
               >
                 Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Hour request modal ── */}
+      {hourModal && activeConvo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(42,39,42,0.4)' }} onClick={() => !hourSubmitting && setHourModal(false)} />
+          <div style={{ position: 'relative', backgroundColor: '#FEFFFF', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: '380px', boxShadow: '0 8px 40px rgba(42,39,42,0.15)', border: '1px solid #E0E0DC' }}>
+            <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Request Additional Hours</h2>
+            <p style={{ color: '#94B7A2', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+              Ask {activeConvo.otherPerson} to adjust the hour total for this exchange.
+            </p>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>Additional hours requested</label>
+              <input
+                type="number"
+                min="1"
+                value={hourAmount}
+                onChange={e => setHourAmount(e.target.value)}
+                placeholder="e.g. 1"
+                autoFocus
+                style={{ width: '100%', backgroundColor: '#F5F5F3', border: '1px solid #E0E0DC', borderRadius: '0.5rem', padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#2A272A', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            {overlayHourError && (
+              <p style={{ fontSize: '0.75rem', color: '#c0392b', marginBottom: '0.75rem' }}>{overlayHourError}</p>
+            )}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={handleOverlayHourRequest}
+                disabled={hourSubmitting || !hourAmount || parseInt(hourAmount) <= 0}
+                style={{ flex: 1, padding: '0.875rem', backgroundColor: hourSubmitting || !hourAmount ? '#E0E0DC' : '#237371', color: '#FEFFFF', fontWeight: 700, borderRadius: '0.5rem', border: 'none', cursor: hourSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+              >
+                {hourSubmitting ? 'Sending...' : 'Send Request'}
+              </button>
+              <button
+                onClick={() => setHourModal(false)}
+                disabled={hourSubmitting}
+                style={{ padding: '0.875rem 1.25rem', backgroundColor: '#F5F5F3', color: '#2A272A', fontWeight: 600, borderRadius: '0.5rem', border: '1px solid #E0E0DC', cursor: hourSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}
+              >
+                Cancel
               </button>
             </div>
           </div>

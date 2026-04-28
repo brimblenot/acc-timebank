@@ -171,7 +171,9 @@ export default function MyPosts() {
   const renderPostCard = (post) => {
     const sc = statusColor(post.status)
     const approvedApp = post.applications?.find(a => a.status === 'approved')
-    const visibleApps = post.applications?.filter(a => a.status !== 'declined') || []
+    // Hide declined and cancelled applications — when an applicant cancels, the post
+    // reopens and we don't want their cancelled row lingering with no actions.
+    const visibleApps = post.applications?.filter(a => a.status !== 'declined' && a.status !== 'cancelled') || []
     const isCompleted = post.status === 'completed'
     const isCancelled = post.status === 'cancelled'
     const isDeletable = post.status === 'open' || post.status === 'cancelled'
@@ -441,18 +443,6 @@ export default function MyPosts() {
               </div>
             )}
 
-            {/* ── Cancelled Posts ─────────────────────────────── */}
-            {cancelledPosts.length > 0 && (
-              <div style={{ marginBottom: '3rem' }}>
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <h2 style={{ fontFamily: 'var(--font-cormorant)', fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.15rem', color: '#c0392b' }}>Cancelled</h2>
-                  <p style={{ color: '#94B7A2', fontSize: '0.875rem' }}>Exchanges you cancelled and closed.</p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                  {cancelledPosts.map(renderPostCard)}
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>

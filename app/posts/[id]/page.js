@@ -191,7 +191,9 @@ export default function PostDetail() {
   const isOwner = currentUser?.id === post.poster_id
   const isDeletable = isOwner && post.status === 'open'
   const approvedApp = applications.find(a => a.status === 'approved')
-  const visibleApps = applications.filter(a => a.status !== 'declined')
+  // Hide declined and cancelled — a cancelled app means the applicant left and the
+  // post reopened; the row should not linger here either.
+  const visibleApps = applications.filter(a => a.status !== 'declined' && a.status !== 'cancelled')
 
   // Non-owners visiting a cancelled post see an unavailable message
   if (post.status === 'cancelled' && !isOwner) {
